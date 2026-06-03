@@ -162,26 +162,46 @@ export default function UserDashboard() {
               <div className="w-64 flex-shrink-0">
                 {/* Map */}
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Mitra di Sekitar</p>
-                <div className="rounded-2xl overflow-hidden mb-6 relative" style={{ height: 220, background: '#1a5c4a' }}>
-                  {/* SVG map */}
-                  <svg viewBox="0 0 260 220" className="w-full h-full absolute inset-0 opacity-60">
-                    {/* Roads */}
-                    <path d="M30 110 Q80 55 130 75 Q185 95 240 55" stroke="white" strokeWidth="10" fill="none" strokeLinecap="round" opacity="0.5"/>
-                    <path d="M20 170 Q75 130 130 115 Q185 100 245 130" stroke="white" strokeWidth="7" fill="none" strokeLinecap="round" opacity="0.4"/>
-                    <path d="M130 10 Q140 70 130 115 Q120 165 135 210" stroke="white" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.4"/>
-                    {/* City block */}
-                    <polygon points="65,60 155,45 200,85 175,145 90,155 50,110" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.15)" strokeWidth="1"/>
-                  </svg>
-                  {/* Blue dot */}
-                  <div className="absolute w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"
-                    style={{ top: '55%', left: '52%', transform: 'translate(-50%,-50%)' }}
-                  />
-                  {/* Small dot */}
-                  <div className="absolute w-3 h-3 bg-blue-300 rounded-full border-2 border-white shadow"
-                    style={{ top: '28%', left: '30%' }}
-                  />
-                  {/* Expand */}
-                  <button className="absolute bottom-2 right-2 bg-white rounded-lg p-1.5 shadow text-gray-600 text-xs">⤢</button>
+                <div className="w-full h-[220px] rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner mb-6 bg-gray-100">
+                  <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d31869.456012356555!2d114.590111!3d-3.316694!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sid!2sid!4v1710000000000!5m2!1sid!2sid"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="w-full h-full absolute inset-0"
+                  ></iframe>
+
+                  {/* ================= SIMULASI PIN MITRA (100% TEMBUS / COCOK UNTUK DRAG MAPS) ================= */}
+                  {/* Pin Mitra 1: Sarah L. */}
+                  <div className="absolute top-[32%] left-[40%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
+                    {/* Lingkaran Pin */}
+                    <div className="w-7 h-7 bg-white rounded-full border-2 border-orange-500 shadow-md flex items-center justify-center animate-bounce duration-1000">
+                      <span className="text-xs">👩</span>
+                    </div>
+                    {/* Efek radar lingkaran di bawah pin */}
+                    <div className="w-3 h-1.5 bg-orange-500/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
+                  </div>
+
+                  {/* Pin Mitra 2: Marcus J. */}
+                  <div className="absolute bottom-[28%] right-[25%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
+                    {/* Lingkaran Pin */}
+                    <div className="w-7 h-7 bg-white rounded-full border-2 border-blue-600 shadow-md flex items-center justify-center animate-bounce" style={{ animationDelay: '200ms' }}>
+                      <span className="text-xs">👨</span>
+                    </div>
+                    {/* Efek radar lingkaran di bawah pin */}
+                    <div className="w-3 h-1.5 bg-blue-600/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
+                  </div>
+                  {/* ========================================================================================= */}
+
+                  {/* Tombol Perbesar/Expand Melayang di Pojok Kanan Bawah */}
+                  <button className="absolute bottom-3 right-3 bg-white hover:bg-gray-50 p-2 rounded-xl shadow-md border border-gray-100 text-gray-500 transition-colors active:scale-95 z-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 3.75v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
+                    </svg>
+                  </button>
                 </div>
 
                 {/* Tersedia */}
@@ -201,10 +221,10 @@ export default function UserDashboard() {
                   ))}
                 </div>
               </div>
-            </div>
+            </div> {/* Penutup flex gap-8 */}
           </main>
-        </div>
-      </div>
+        </div> {/* Penutup flex flex-1 */}
+      </div> {/* Penutup Outer frame */}
     </div>
   )
 }

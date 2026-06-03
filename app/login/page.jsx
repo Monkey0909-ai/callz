@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API } from "../../api.js";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 const LockIcon = () => (
@@ -69,7 +70,7 @@ const FacebookIcon = () => (
 );
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function InputField({ label, icon, type = "text", placeholder, id, autoComplete }) {
+function InputField({ label, icon, type = "text", placeholder, id, autoComplete, value, onChange }) {
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
   const inputType = isPassword ? (show ? "text" : "password") : type;
@@ -88,6 +89,8 @@ function InputField({ label, icon, type = "text", placeholder, id, autoComplete 
           type={inputType}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
           style={{
             width: "100%", padding: "12px 14px 12px 42px",
             border: "1.5px solid #e4e6ed", borderRadius: 14,
@@ -157,21 +160,90 @@ function SocialButtons({ label }) {
 }
 
 // ── Login Panel ───────────────────────────────────────────────────────────────
-function LoginPanel({ onSwitch }) {
+function LoginPanel({ onSwitch, role }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const response = await fetch(API.login, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, role }), // kirim role: "pengguna" | "mitra"
+      });
+
+      const data = await response.json();
+      console.log("Login response:", data);
+
+      if (!response.ok) {
+        setError(data?.message || "Login gagal. Periksa email dan password Anda.");
+        return;
+      }
+
+      // Simpan token jika ada
+      if (data?.token) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", role);
+      }
+
+      // Ambil data profil sesuai role
+      const meEndpoint = role === "mitra" ? API.meMitra : API.meUser;
+      const meRes = await fetch(meEndpoint, {
+        headers: { Authorization: `Bearer ${data.token}` },
+      });
+      const meData = await meRes.json();
+      console.log("Profil:", meData);
+
+      alert(`Login berhasil! Selamat datang, ${meData?.name || meData?.data?.name || email}`);
+    } catch (err) {
+      console.error(err);
+      setError("Terjadi kesalahan. Coba lagi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
-      <InputField label="Email" icon={<MailIcon />} type="email" placeholder="nama@email.com" autoComplete="email" />
-      <InputField label="Password" icon={<KeyIcon />} type="password" placeholder="Masukkan password" autoComplete="current-password" />
+      <InputField
+        label="Email"
+        icon={<MailIcon />}
+        type="email"
+        placeholder="nama@email.com"
+        autoComplete="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
+      <InputField
+        label="Password"
+        icon={<KeyIcon />}
+        type="password"
+        placeholder="Masukkan password"
+        autoComplete="current-password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+      />
+
+      {error && (
+        <p style={{ color: "#e53935", fontSize: 13, marginBottom: 12, marginTop: -6 }}>{error}</p>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, marginTop: -4 }}>
         <Checkbox label="Ingat saya" defaultChecked />
         <a href="#" style={{ fontSize: 13, fontWeight: 600, color: "#3B5BFF", textDecoration: "none" }}>Lupa password?</a>
       </div>
       <button
-        style={{ width: "100%", padding: 14, background: "#3B5BFF", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", boxShadow: "0 4px 16px rgba(59,91,255,0.30)", letterSpacing: ".2px", transition: "background .2s" }}
-        onMouseEnter={e => e.currentTarget.style.background = "#2945e0"}
-        onMouseLeave={e => e.currentTarget.style.background = "#3B5BFF"}
+        onClick={handleLogin}
+        disabled={loading}
+        style={{ width: "100%", padding: 14, background: loading ? "#7a91ff" : "#3B5BFF", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: loading ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(59,91,255,0.30)", letterSpacing: ".2px", transition: "background .2s" }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#2945e0"; }}
+        onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#3B5BFF"; }}
       >
-        Masuk
+        {loading ? "Memproses..." : "Masuk"}
       </button>
       <p style={{ textAlign: "center", fontSize: 13.5, color: "#5c6070", marginTop: 18 }}>
         Belum punya akun?{" "}
@@ -183,21 +255,123 @@ function LoginPanel({ onSwitch }) {
 }
 
 // ── Register Panel ────────────────────────────────────────────────────────────
-function RegisterPanel({ onSwitch }) {
+function RegisterPanel({ onSwitch, role }) {
+  const [firstName, setFirstName]     = useState("");
+  const [lastName, setLastName]       = useState("");
+  const [email, setEmail]             = useState("");
+  const [phone, setPhone]             = useState("");
+  const [password, setPassword]       = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState("");
+
+  const handleRegister = async () => {
+    setError("");
+
+    if (password !== confirmPass) {
+      setError("Password dan konfirmasi password tidak cocok.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const endpoint = role === "mitra" ? API.registerMitra : API.registerUser;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${firstName} ${lastName}`.trim(),
+          email,
+          phone,
+          password,
+          password_confirmation: confirmPass,
+        }),
+      });
+
+      const data = await response.json();
+      console.log("Register response:", data);
+
+      if (!response.ok) {
+        setError(data?.message || "Pendaftaran gagal. Periksa data Anda.");
+        return;
+      }
+
+      alert("Pendaftaran berhasil! Silakan masuk.");
+      onSwitch(); // arahkan ke halaman login
+    } catch (err) {
+      console.error(err);
+      setError("Terjadi kesalahan. Coba lagi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <InputField label="Nama Depan" icon={<UserIcon />} placeholder="Budi" autoComplete="given-name" />
+          <InputField
+            label="Nama Depan"
+            icon={<UserIcon />}
+            placeholder="Budi"
+            autoComplete="given-name"
+            value={firstName}
+            onChange={e => setFirstName(e.target.value)}
+          />
         </div>
         <div style={{ flex: 1 }}>
-          <InputField label="Nama Belakang" icon={<UserIcon />} placeholder="Santoso" autoComplete="family-name" />
+          <InputField
+            label="Nama Belakang"
+            icon={<UserIcon />}
+            placeholder="Santoso"
+            autoComplete="family-name"
+            value={lastName}
+            onChange={e => setLastName(e.target.value)}
+          />
         </div>
       </div>
-      <InputField label="Email" icon={<MailIcon />} type="email" placeholder="nama@email.com" autoComplete="email" />
-      <InputField label="No. Telepon" icon={<PhoneIcon />} type="tel" placeholder="08xxxxxxxxxx" autoComplete="tel" />
-      <InputField label="Password" icon={<KeyIcon />} type="password" placeholder="Buat password" autoComplete="new-password" />
-      <InputField label="Konfirmasi Password" icon={<KeyIcon />} type="password" placeholder="Ulangi password" autoComplete="new-password" />
+      <InputField
+        label="Email"
+        icon={<MailIcon />}
+        type="email"
+        placeholder="nama@email.com"
+        autoComplete="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
+      <InputField
+        label="No. Telepon"
+        icon={<PhoneIcon />}
+        type="tel"
+        placeholder="08xxxxxxxxxx"
+        autoComplete="tel"
+        value={phone}
+        onChange={e => setPhone(e.target.value)}
+      />
+      <InputField
+        label="Password"
+        icon={<KeyIcon />}
+        type="password"
+        placeholder="Buat password"
+        autoComplete="new-password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+      />
+      <InputField
+        label="Konfirmasi Password"
+        icon={<KeyIcon />}
+        type="password"
+        placeholder="Ulangi password"
+        autoComplete="new-password"
+        value={confirmPass}
+        onChange={e => setConfirmPass(e.target.value)}
+      />
+
+      {error && (
+        <p style={{ color: "#e53935", fontSize: 13, marginBottom: 12, marginTop: -6 }}>{error}</p>
+      )}
+
       <div style={{ marginBottom: 20 }}>
         <Checkbox
           label={
@@ -211,11 +385,13 @@ function RegisterPanel({ onSwitch }) {
         />
       </div>
       <button
-        style={{ width: "100%", padding: 14, background: "#3B5BFF", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", boxShadow: "0 4px 16px rgba(59,91,255,0.30)", letterSpacing: ".2px", transition: "background .2s" }}
-        onMouseEnter={e => e.currentTarget.style.background = "#2945e0"}
-        onMouseLeave={e => e.currentTarget.style.background = "#3B5BFF"}
+        onClick={handleRegister}
+        disabled={loading}
+        style={{ width: "100%", padding: 14, background: loading ? "#7a91ff" : "#3B5BFF", color: "white", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: loading ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(59,91,255,0.30)", letterSpacing: ".2px", transition: "background .2s" }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#2945e0"; }}
+        onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#3B5BFF"; }}
       >
-        Daftar Sekarang
+        {loading ? "Memproses..." : "Daftar Sekarang"}
       </button>
       <p style={{ textAlign: "center", fontSize: 13.5, color: "#5c6070", marginTop: 18 }}>
         Sudah punya akun?{" "}
@@ -228,7 +404,7 @@ function RegisterPanel({ onSwitch }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AuthPage() {
-  const [panel, setPanel] = useState("login");   // "login" | "daftar"
+  const [panel, setPanel] = useState("login");    // "login" | "daftar"
   const [role, setRole]   = useState("pengguna"); // "pengguna" | "mitra"
 
   const isLogin  = panel === "login";
@@ -237,9 +413,6 @@ export default function AuthPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#e8ecf5", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-
-      {/* Google Font */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');`}</style>
 
       {/* Back link */}
       <a href="/" style={{ alignSelf: "flex-start", maxWidth: 420, width: "100%", color: "#5c6070", fontSize: 14, fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", gap: 6, marginBottom: 18 }}>
@@ -301,8 +474,8 @@ export default function AuthPage() {
 
         {/* Panel */}
         {isLogin
-          ? <LoginPanel   onSwitch={() => setPanel("daftar")} />
-          : <RegisterPanel onSwitch={() => setPanel("login")} />
+          ? <LoginPanel role={role} onSwitch={() => setPanel("daftar")} />
+          : <RegisterPanel role={role} onSwitch={() => setPanel("login")} />
         }
 
       </div>

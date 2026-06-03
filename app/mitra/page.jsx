@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 const navItems = [
   { label: 'Dashboard', icon: '⊞', href: '/mitra', active: true },
-  { label: 'Tugas Aktif', icon: '↺', href: '/mitra/tugas-aktif' },
+  { label: 'Tugas Aktif', icon: '↺', href: '/mitra/tugas-aktif'        },
   { label: 'Riwayat', icon: '🕐', href: '/mitra/riwayat' },
   { label: 'Pengaturan', icon: '⚙', href: '/mitra/pengaturan' },
 ]
@@ -112,27 +112,30 @@ export default function MitraDashboard() {
                 </button>
               </div>
 
-              {/* Map placeholder */}
-              <div className="bg-gray-200 rounded-xl h-52 my-4 relative overflow-hidden flex items-center justify-center">
-                <div className="text-gray-400 text-sm">Peta Rute</div>
-                {/* Route markers */}
-                <div className="absolute top-4 left-4 bg-white rounded-lg px-3 py-2 shadow-md">
-                  <p className="text-xs text-gray-400 font-semibold">PENGAMBILAN</p>
-                  <p className="text-sm font-bold text-gray-800">Whole Foods Market</p>
-                </div>
-                <div className="absolute bottom-4 right-4 bg-white rounded-lg px-3 py-2 shadow-md">
-                  <p className="text-xs text-gray-400 font-semibold">PENGIRIMAN</p>
-                  <p className="text-sm font-bold text-gray-800">Jalan 23 Barat No. 242</p>
-                </div>
-                <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 400 200">
-                  {[...Array(10)].map((_, i) => (
-                    <line key={i} x1={i * 40} y1="0" x2={i * 40} y2="200" stroke="#9ca3af" strokeWidth="1" />
-                  ))}
-                  {[...Array(5)].map((_, i) => (
-                    <line key={i} x1="0" y1={i * 40} x2="400" y2={i * 40} stroke="#9ca3af" strokeWidth="1" />
-                  ))}
-                </svg>
-              </div>
+             {/* Map Real (Google Maps Banjarmasin Resmi) */}
+<div className="w-full h-52 my-4 rounded-xl overflow-hidden border border-gray-200 relative shadow-inner">
+  <iframe
+    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d63717.3787723908!2d114.55742516416625!3d-3.316693982464167!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2dee3f3a4bd87bf9%3A0x3030bfbcaf7b050!2sBanjarmasin%2C%20Kota%20Banjarmasin%2C%20Kalimantan%20Selatan!5e0!3m2!1sid!2sid!4v1717460000000!5m2!1sid!2sid"
+    width="100%"
+    height="100%"
+    style={{ border: 0 }}
+    allowFullScreen=""
+    loading="lazy"
+    referrerPolicy="no-referrer-when-downgrade"
+    className="w-full h-full"
+  ></iframe>
+
+  {/* Route markers (Tetap Melayang di Atas Peta) */}
+  <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-gray-100 z-10">
+    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">PENGAMBILAN</p>
+    <p className="text-xs font-bold text-gray-800">Pesanan di warung </p>
+  </div>
+  
+  <div className="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-gray-100 z-10">
+    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">PENGIRIMAN</p>
+    <p className="text-xs font-bold text-gray-800">Jalan 23 Barat No. 242</p>
+  </div>
+</div>
 
               {/* Instructions + Actions */}
               <div className="flex gap-4">
@@ -141,9 +144,16 @@ export default function MitraDashboard() {
                   <p className="text-sm text-gray-700">"Pastikan telor nya di pisahkan plastiknya dan telpon ketika sampai di lobi. Jangan digantung di pintu."</p>
                 </div>
                 <div className="flex flex-col gap-2 justify-center">
-                  <button className="bg-blue-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2">
-                    ▲ Buka Navigasi
-                  </button>
+                  
+                {/* LANGSUNG GANTI JADI SEPERTI INI */}
+<a
+  href="https://www.google.com/maps/dir/?api=1&destination=Jalan+23+Barat+No.+242+Banjarmasin"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="w-full bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-sm py-3 px-5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+>
+  ▲ Buka Navigasi
+</a>
                   <button className="bg-gray-100 text-gray-700 font-semibold px-6 py-2.5 rounded-xl hover:bg-gray-200 transition-colors text-sm">
                     Tandai sudah diambil
                   </button>
@@ -176,7 +186,7 @@ export default function MitraDashboard() {
                 </div>
               ))}
               <Link
-                href="/mitra/tugas"
+                href="/mitra/semua-tugas"
                 className="block text-center border-2 border-gray-200 text-gray-600 font-semibold text-sm py-3 rounded-xl hover:border-blue-300 hover:text-blue-600 transition-colors"
               >
                 Lihat Semua Tugas Tersedia
