@@ -1,10 +1,10 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navItems = [
-  { label: 'Dashboard',  icon: '⊞', href: '/dashboard' },
-  { label: 'Riwayat',    icon: '🕐', href: '/dashboard/riwayat' },
+  { label: 'Dashboard',   icon: '⊞', href: '/dashboard' },
+  { label: 'Riwayat',     icon: '🕐', href: '/dashboard/riwayat' },
   { label: 'Pengaturan', icon: '⚙', href: '/dashboard/pengaturan', active: true },
 ]
 
@@ -17,17 +17,18 @@ const settingsTabs = [
   { id: 'bantuan',    label: 'Bantuan' },
 ]
 
-function Field({ label, value = '', type = 'text', placeholder, hint, readOnly }) {
-  const [v, setV] = useState(value)
+function Field({ label, value = '', type = 'text', placeholder, hint, readOnly, onChange }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
         {label}
       </label>
       <input
-        type={type} value={v}
-        onChange={e => setV(e.target.value)}
-        placeholder={placeholder} readOnly={readOnly}
+        type={type} 
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder} 
+        readOnly={readOnly}
         style={{
           width: '100%', padding: '10px 14px',
           border: '1.5px solid #e2e8f0', borderRadius: 10,
@@ -62,14 +63,16 @@ function Section({ title, children }) {
   )
 }
 
-function ProfilPanel() {
+function ProfilPanel({ firstName, setFirstName, lastName, setLastName, email, setEmail, phone, setPhone, birthDate, setBirthDate, onSave, saveStatus }) {
   return (
     <>
       <Section title="Foto Profil">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>😊</div>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>
+            {firstName ? firstName.charAt(0).toUpperCase() : '😊'}
+          </div>
           <div>
-            <p style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Alex</p>
+            <p style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{firstName || 'User'}</p>
             <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>JPG, PNG maks. 2MB</p>
             <button style={{ padding: '7px 14px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: '#475569' }}>Ganti Foto</button>
           </div>
@@ -77,14 +80,29 @@ function ProfilPanel() {
       </Section>
       <Section title="Informasi Pribadi">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
-          <Field label="Nama Depan" value="Alex" />
-          <Field label="Nama Belakang" value="Santoso" />
+          <Field label="Nama Depan" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <Field label="Nama Belakang" value={lastName} onChange={(e) => setLastName(e.target.value)} />
         </div>
-        <Field label="Email" value="alex.santoso@email.com" type="email" hint="Email tidak dapat diubah setelah verifikasi" readOnly />
-        <Field label="No. Telepon" value="081234567890" type="tel" />
-        <Field label="Tanggal Lahir" value="1995-08-20" type="date" />
-        <button style={{ padding: '10px 22px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          Simpan Perubahan
+        {/* Properti readOnly dilepas agar Email bisa diubah bebas */}
+        <Field label="Email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" hint="Gunakan alamat email aktif Anda" />
+        <Field label="No. Telepon" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
+        <Field label="Tanggal Lahir" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date" />
+        <button 
+          onClick={onSave}
+          style={{ 
+            padding: '10px 22px', 
+            background: saveStatus === 'Tersimpan!' ? '#22c55e' : '#2563eb', 
+            color: '#fff', 
+            border: 'none', 
+            borderRadius: 10, 
+            fontSize: 13, 
+            fontWeight: 700, 
+            cursor: 'pointer', 
+            fontFamily: 'inherit',
+            transition: 'background 0.2s'
+          }}
+        >
+          {saveStatus}
         </button>
       </Section>
     </>
@@ -202,31 +220,91 @@ function BantuanPanel() {
   )
 }
 
-const panels = {
-  profil:     <ProfilPanel />,
-  notifikasi: <NotifikasiPanel />,
-  keamanan:   <KeamananPanel />,
-  pembayaran: <PembayaranPanel />,
-  alamat:     <AlamatPanel />,
-  bantuan:    <BantuanPanel />,
-}
-
 export default function PengaturanPage() {
   const [tab, setTab] = useState('profil')
+  const [saveStatus, setSaveStatus] = useState('Simpan Perubahan')
+
+  // State untuk data profil user (Termasuk email dinamis)
+  const [firstName, setFirstName] = useState('Alex')
+  const [lastName, setLastName] = useState('Santoso')
+  const [email, setEmail] = useState('alex.santoso@email.com')
+  const [phone, setPhone] = useState('081234567890')
+  const [birthDate, setBirthDate] = useState('1995-08-20')
+
+  // Load data awal dari localStorage (Data Pendaftaran)
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser)
+        if (parsedUser.first_name) setFirstName(parsedUser.first_name)
+        if (parsedUser.last_name) setLastName(parsedUser.last_name)
+        if (parsedUser.email) setEmail(parsedUser.email)
+        if (parsedUser.phone) setPhone(parsedUser.phone)
+        if (parsedUser.birthDate) setBirthDate(parsedUser.birthDate)
+      } catch (e) {
+        console.error('Gagal memproses data pendaftaran.', e)
+      }
+    }
+  }, [])
+
+  // Aksi simpan perubahan dan sinkronisasi ke seluruh aplikasi
+  const handleSaveProfile = () => {
+    setSaveStatus('Menyimpan...')
+    const updatedUser = {
+      first_name: firstName,
+      last_name: lastName,
+      name: `${firstName} ${lastName}`.trim(),
+      email: email, // Menyimpan email baru ke localStorage
+      phone: phone,
+      birthDate: birthDate
+    }
+    
+    localStorage.setItem('user', JSON.stringify(updatedUser))
+    
+    // Picu event kustom agar sidebar langsung terupdate tanpa reload halaman
+    window.dispatchEvent(new Event('profileUpdated'))
+
+    setTimeout(() => {
+      setSaveStatus('Tersimpan!')
+      setTimeout(() => setSaveStatus('Simpan Perubahan'), 2000)
+    }, 600)
+  }
+
+  const panels = {
+    profil: <ProfilPanel 
+              firstName={firstName} setFirstName={setFirstName}
+              lastName={lastName} setLastName={setLastName}
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              birthDate={birthDate} setBirthDate={setBirthDate}
+              onSave={handleSaveProfile} saveStatus={saveStatus}
+            />,
+    notifikasi: <NotifikasiPanel />,
+    keamanan:   <KeamananPanel />,
+    pembayaran: <PembayaranPanel />,
+    alamat:     <AlamatPanel />,
+    bantuan:    <BantuanPanel />,
+  }
+
+  const fullName = `${firstName} ${lastName}`.trim()
+  const initialLetter = firstName ? firstName.charAt(0).toUpperCase() : 'A'
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
 
       {/* ── Sidebar kiri ── */}
       <aside style={{ width: 210, background: '#fff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', padding: '24px 0', position: 'sticky', top: 0, height: '100vh', flexShrink: 0 }}>
-        <div style={{ padding: '0 20px 24px', fontSize: 20, fontWeight: 900, color: '#0f172a' }}>CallZ</div>
+        <div style={{ padding: '0 20px 24px', fontSize: 20, fontWeight: 900, color: '#2563eb', letterSpacing: '-0.5px' }}>CallZ</div>
 
-        {/* User */}
-        <div style={{ margin: '0 12px 20px', background: '#f8fafc', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🧑</div>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Alex</p>
-            <p style={{ fontSize: 11, color: '#94a3b8' }}>User</p>
+        {/* User - Dinamis */}
+        <div style={{ margin: '0 12px 20px', background: '#f8fafc', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+            {initialLetter}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName || 'User'}</p>
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>User Pelanggan</p>
           </div>
         </div>
 
@@ -310,7 +388,7 @@ export default function PengaturanPage() {
           </div>
 
         </div>
-      </div>
+      </div> 
     </div>
   )
 }

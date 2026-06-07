@@ -1,11 +1,11 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navItems = [
-  { label: 'Dashboard',  icon: '⊞', href: '/dashboard',          active: true },
-  { label: 'Riwayat',    icon: '🕐', href: '/dashboard/riwayat'              },
-  { label: 'Pengaturan', icon: '⚙', href: '/dashboard/pengaturan'            },
+  { label: 'Dashboard',   icon: '⊞', href: '/dashboard',           active: true },
+  { label: 'Riwayat',     icon: '🕐', href: '/dashboard/riwayat'               },
+  { label: 'Pengaturan',  icon: '⚙', href: '/dashboard/pengaturan'            },
 ]
 
 const TUGAS_CEPAT = [
@@ -21,10 +21,83 @@ const MITRA_TERSEDIA = [
 
 export default function UserDashboard() {
   const [search, setSearch] = useState('')
+  const [firstName, setFirstName] = useState('Alex')
+  const [lastName, setLastName] = useState('Santoso')
+  
+  // State baru untuk menangkap tugas aktif dari localStorage
+  const [activeTask, setActiveTask] = useState(null)
+  const [simulatedProgress, setSimulatedProgress] = useState(15)
+  const [simulatedStatus, setSimulatedStatus] = useState('Mencari kurir terdekat untuk menjemput paket...')
+
+  const loadUserData = () => {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser)
+        if (parsedUser.first_name) setFirstName(parsedUser.first_name)
+        if (parsedUser.last_name) setLastName(parsedUser.last_name)
+      } catch (e) {
+        console.error('Gagal mengambil data user', e)
+      }
+    }
+  }
+
+  const checkActiveTask = () => {
+    const existingTasks = JSON.parse(localStorage.getItem('callz_tasks')) || []
+    // Mencari jika ada tugas yang statusnya masih berjalan/mencari kurir
+    const currentRunningTask = existingTasks.find(task => task.kurir === 'Mencari Kurir...')
+    
+    if (currentRunningTask) {
+      setActiveTask(currentRunningTask)
+    } else {
+      setActiveTask(null)
+    }
+  }
+
+  useEffect(() => {
+    loadUserData()
+    checkActiveTask()
+
+    window.addEventListener('profileUpdated', loadUserData)
+    return () => window.removeEventListener('profileUpdated', loadUserData)
+  }, [])
+
+  // Efek simulasi pergerakan kurir & progress update secara real-time
+  useEffect(() => {
+    if (!activeTask) return;
+
+    const interval = setInterval(() => {
+      setSimulatedProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval)
+          // Opsional: Perbarui status di localStorage ke 'Selesai' jika sudah 100%
+          const existingTasks = JSON.parse(localStorage.getItem('callz_tasks')) || []
+          const updated = existingTasks.map(t => t.id === activeTask.id ? { ...t, kurir: 'David K.', status: 'Selesai' } : t)
+          localStorage.setItem('callz_tasks', JSON.stringify(updated))
+          return 100
+        }
+        
+        // Perubahan pesan status berdasarkan jangkauan progress
+        if (prev > 75) {
+          setSimulatedStatus('Kurir hampir sampai ke lokasi tujuan pengantaran.')
+        } else if (prev > 45) {
+          setSimulatedStatus('Paket berhasil diambil. Kurir sedang menuju lokasi tujuan.')
+        } else if (prev > 25) {
+          setSimulatedStatus('Kurir sudah tiba di lokasi penjemputan utama.')
+        }
+        
+        return prev + Math.floor(Math.random() * 15) + 5
+      })
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [activeTask])
+
+  const fullName = `${firstName} ${lastName}`.trim()
+  const initialLetter = firstName ? firstName.charAt(0).toUpperCase() : 'A'
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
-      {/* Outer frame */}
       <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col" style={{ minHeight: 820 }}>
 
         {/* Topbar */}
@@ -57,16 +130,18 @@ export default function UserDashboard() {
         <div className="flex flex-1">
           {/* Sidebar */}
           <aside className="w-52 bg-white border-r border-gray-100 flex flex-col py-6 px-4 flex-shrink-0">
-            {/* Logo */}
-            <p className="font-black text-gray-900 text-xl px-2 mb-6">CallZ</p>
+            <p className="font-black text-blue-600 text-xl px-2 mb-6">CallZ</p>
 
-            {/* User */}
-            <div className="flex items-center gap-3 px-2 mb-8">
-              <div className="w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-base">🧑</div>
-              <p className="font-bold text-sm text-gray-900">User</p>
+            <div className="flex items-center gap-3 px-2 mb-8 overflow-hidden">
+              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                {initialLetter}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-sm text-gray-900 truncate m-0">{fullName || 'User'}</p>
+                <p className="text-xs text-gray-400 m-0">User Pelanggan</p>
+              </div>
             </div>
 
-            {/* Nav */}
             <nav className="space-y-1 flex-1">
               {navItems.map(item => (
                 <Link
@@ -83,7 +158,6 @@ export default function UserDashboard() {
               ))}
             </nav>
 
-            {/* Buat Tugas */}
             <Link
               href="/dashboard/tugas"
               className="bg-blue-600 text-white text-sm font-bold text-center py-3 rounded-xl hover:bg-blue-700 transition-colors block"
@@ -94,10 +168,9 @@ export default function UserDashboard() {
 
           {/* Main Content */}
           <main className="flex-1 p-8 overflow-y-auto">
-            {/* Welcome */}
             <div className="mb-8">
               <h1 className="text-4xl font-black text-gray-900 leading-tight">
-                Selamat Datang kembali, Alex.<br />
+                Selamat Datang kembali, {firstName}.<br />
                 Siap untuk{' '}
                 <span className="text-blue-600">mengembalikan waktu Anda?</span>
               </h1>
@@ -107,58 +180,75 @@ export default function UserDashboard() {
             </div>
 
             <div className="flex gap-8">
-              {/* Left */}
-              <div className="flex-1 min-w-0">
+              {/* Left Column */}
+              <div className="flex-1 min-w-0 flex flex-col gap-6">
                 {/* Tugas Cepat */}
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tugas Cepat</p>
-                <div className="grid grid-cols-3 gap-4 mb-8">
-                  {TUGAS_CEPAT.map((t, i) => (
-                    <Link
-                      key={i}
-                      href="/dashboard/tugas"
-                      className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block"
-                    >
-                      <div className="text-blue-500 text-2xl mb-3">{t.icon}</div>
-                      <p className="font-bold text-sm text-gray-900 mb-1 leading-tight">{t.label}</p>
-                      <p className="text-xs text-gray-400">{t.sub}</p>
-                    </Link>
-                  ))}
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tugas Cepat</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    {TUGAS_CEPAT.map((t, i) => (
+                      <Link
+                        key={i}
+                        href="/dashboard/tugas"
+                        className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block"
+                      >
+                        <div className="text-blue-500 text-2xl mb-3">{t.icon}</div>
+                        <p className="font-bold text-sm text-gray-900 mb-1 leading-tight">{t.label}</p>
+                        <p className="text-xs text-gray-400">{t.sub}</p>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Tugas Aktif — hanya tampil kalau ada tugas */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 hidden">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tugas Aktif</p>
-                    <span className="text-xs bg-yellow-100 text-yellow-700 font-bold px-2.5 py-1 rounded-full">DALAM PROGRESS</span>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-xl">👨‍💼</div>
-                    <div className="flex-1">
-                      <p className="font-black text-gray-900">Courier Mitra: David K.</p>
-                      <p className="text-xs text-blue-600 font-bold uppercase mt-0.5">Misi Aktif</p>
-                      <p className="text-sm text-gray-500 mt-2">Belanja Bahan Makanan: Pasar Organik</p>
-                      <div className="mt-3 flex items-center gap-3">
-                        <div className="flex-1 bg-gray-100 rounded-full h-2">
-                          <div className="bg-blue-600 h-2 rounded-full" style={{ width: '75%' }}></div>
+                {/* Tugas Aktif — Dinamis menggunakan LocalStorage */}
+                {activeTask ? (
+                  <div className="bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tugas Aktif Terkini</p>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${simulatedProgress === 100 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700 animate-pulse'}`}>
+                        {simulatedProgress === 100 ? 'SELESAI' : 'DALAM PROGRESS'}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">
+                        {activeTask.icon || '📦'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-gray-900 truncate">{activeTask.judul}</p>
+                        <p className="text-xs text-blue-600 font-bold uppercase mt-0.5">ID: {activeTask.id}</p>
+                        <p className="text-sm text-gray-500 mt-2">Kategori Kerja: <strong className="text-gray-700">{activeTask.kategori}</strong></p>
+                        
+                        <div className="mt-4 flex items-center gap-3">
+                          <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                            <div className="bg-blue-600 h-full rounded-full transition-all duration-1000" style={{ width: `${simulatedProgress}%` }}></div>
+                          </div>
+                          <span className="text-sm font-bold text-blue-600 flex-shrink-0">{simulatedProgress}%</span>
                         </div>
-                        <span className="text-sm font-bold text-blue-600">75% Selesai</span>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-4 max-w-xs w-full flex flex-col gap-1">
+                        <p className="text-xs font-bold text-gray-400">STATUS LIVE</p>
+                        <p className="text-xs text-gray-700 leading-relaxed">{simulatedStatus}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-400">
+                          <span>📍</span><span>Kurir: {simulatedProgress > 25 ? 'David K.' : 'Menuju Lokasi'}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-gray-50 rounded-xl p-4 max-w-xs">
-                      <p className="text-xs font-bold text-gray-400 mb-1">STATUS SEKARANG</p>
-                      <p className="text-sm text-gray-700">Mengambil barang-barang terakhir di kasir. Diperkirakan tiba dalam 12 menit.</p>
-                      <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-400">
-                        <span>📍</span><span>3.2 km</span>
-                      </div>
+                    <div className="mt-4 flex gap-2">
+                      <Link href="/dashboard/riwayat" className="border border-gray-200 text-gray-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+                        📋 Detail Histori & Biaya
+                      </Link>
                     </div>
                   </div>
-                  <button className="mt-4 border border-gray-200 text-gray-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
-                    📋 Lihat Daftar
-                  </button>
-                </div>
+                ) : (
+                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+                    <span className="text-3xl mb-2">🤝</span>
+                    <p className="text-sm font-bold text-gray-500">Tidak Ada Misi Berjalan</p>
+                    <p className="text-xs text-gray-400 mt-1 max-w-sm">Semua kiriman atau tugas Anda telah selesai dikerjakan oleh Mitra CallZ.</p>
+                  </div>
+                )}
               </div>
 
-              {/* Right */}
+              {/* Right Column */}
               <div className="w-64 flex-shrink-0">
                 {/* Map */}
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Mitra di Sekitar</p>
@@ -174,29 +264,21 @@ export default function UserDashboard() {
                     className="w-full h-full absolute inset-0"
                   ></iframe>
 
-                  {/* ================= SIMULASI PIN MITRA (100% TEMBUS / COCOK UNTUK DRAG MAPS) ================= */}
-                  {/* Pin Mitra 1: Sarah L. */}
+                  {/* Simulasi Pin Mitra */}
                   <div className="absolute top-[32%] left-[40%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-                    {/* Lingkaran Pin */}
                     <div className="w-7 h-7 bg-white rounded-full border-2 border-orange-500 shadow-md flex items-center justify-center animate-bounce duration-1000">
                       <span className="text-xs">👩</span>
                     </div>
-                    {/* Efek radar lingkaran di bawah pin */}
                     <div className="w-3 h-1.5 bg-orange-500/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
                   </div>
 
-                  {/* Pin Mitra 2: Marcus J. */}
                   <div className="absolute bottom-[28%] right-[25%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-                    {/* Lingkaran Pin */}
                     <div className="w-7 h-7 bg-white rounded-full border-2 border-blue-600 shadow-md flex items-center justify-center animate-bounce" style={{ animationDelay: '200ms' }}>
                       <span className="text-xs">👨</span>
                     </div>
-                    {/* Efek radar lingkaran di bawah pin */}
                     <div className="w-3 h-1.5 bg-blue-600/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
                   </div>
-                  {/* ========================================================================================= */}
 
-                  {/* Tombol Perbesar/Expand Melayang di Pojok Kanan Bawah */}
                   <button className="absolute bottom-3 right-3 bg-white hover:bg-gray-50 p-2 rounded-xl shadow-md border border-gray-100 text-gray-500 transition-colors active:scale-95 z-10">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 3.75v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
@@ -221,10 +303,10 @@ export default function UserDashboard() {
                   ))}
                 </div>
               </div>
-            </div> {/* Penutup flex gap-8 */}
+            </div>
           </main>
-        </div> {/* Penutup flex flex-1 */}
-      </div> {/* Penutup Outer frame */}
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation"; 
 import { API } from "../../api.js";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -161,52 +162,55 @@ function SocialButtons({ label }) {
 
 // ── Login Panel ───────────────────────────────────────────────────────────────
 function LoginPanel({ onSwitch, role }) {
+  const router = useRouter(); 
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleLogin = async () => {
+    if (loading) return;
     setError("");
     setLoading(true);
     try {
+      // 🛠️ FIX 1: Karena key di state utama sekarang bernilai "user" atau "mitra",
+      // kita bisa langsung mengirimkan nilai role ke backend.
       const response = await fetch(API.login, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }), // kirim role: "pengguna" | "mitra"
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify({ email, password, role: role }),
       });
 
       const data = await response.json();
-      console.log("Login response:", data);
 
-      if (!response.ok) {
-        setError(data?.message || "Login gagal. Periksa email dan password Anda.");
-        return;
-      }
-
-      // Simpan token jika ada
-      if (data?.token) {
+      if (data.success === true) {
         localStorage.setItem("token", data.token);
-        localStorage.setItem("role", role);
+        localStorage.setItem("role", data.role);
+        localStorage.setItem("user", JSON.stringify(data.data));
+
+        alert("Login Berhasil!"); 
+
+if (data.role === "mitra") {
+  router.push("/mitra");
+} else {
+          router.push("/dashboard");
+        }
+      } else {
+        // 🛠️ FIX 2: Menampilkan pesan spesifik dari validasi backend jika ada
+        const errMsg = data?.message || (data?.errors?.role ? data.errors.role[0] : "Email atau password salah.");
+        setError(errMsg);
       }
-
-      // Ambil data profil sesuai role
-      const meEndpoint = role === "mitra" ? API.meMitra : API.meUser;
-      const meRes = await fetch(meEndpoint, {
-        headers: { Authorization: `Bearer ${data.token}` },
-      });
-      const meData = await meRes.json();
-      console.log("Profil:", meData);
-
-      alert(`Login berhasil! Selamat datang, ${meData?.name || meData?.data?.name || email}`);
     } catch (err) {
       console.error(err);
-      setError("Terjadi kesalahan. Coba lagi.");
+      setError("Terjadi kesalahan koneksi ke server.");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div>
       <InputField
@@ -279,26 +283,31 @@ function RegisterPanel({ onSwitch, role }) {
 
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({
-          name: `${firstName} ${lastName}`.trim(),
-          email,
-          phone,
-          password,
-          password_confirmation: confirmPass,
-        }),
+  first_name: firstName,
+  last_name: lastName,
+  email,
+  phone,
+  password,
+  password_confirmation: confirmPass,
+}),
       });
 
       const data = await response.json();
       console.log("Register response:", data);
 
-      if (!response.ok) {
-        setError(data?.message || "Pendaftaran gagal. Periksa data Anda.");
+      if (!data.success) {
+        const errMsg = data?.message || (data?.errors ? Object.values(data.errors).flat().join(", ") : "Pendaftaran gagal. Periksa data Anda.");
+        setError(errMsg);
         return;
       }
 
       alert("Pendaftaran berhasil! Silakan masuk.");
-      onSwitch(); // arahkan ke halaman login
+      onSwitch(); 
     } catch (err) {
       console.error(err);
       setError("Terjadi kesalahan. Coba lagi.");
@@ -405,14 +414,20 @@ function RegisterPanel({ onSwitch, role }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AuthPage() {
   const [panel, setPanel] = useState("login");    // "login" | "daftar"
-  const [role, setRole]   = useState("pengguna"); // "pengguna" | "mitra"
+  const [role, setRole]   = useState("user");     // "user" | "mitra"
 
   const isLogin  = panel === "login";
   const title    = isLogin ? "Selamat Datang" : "Buat Akun";
   const subtitle = isLogin ? "Silakan masuk ke akun Anda" : "Daftarkan diri Anda sekarang";
 
+  // 🛠️ FIX 3: Definisikan mapping object untuk render UI text secara dinamis
+  const rolesConfig = [
+    { key: "user", label: "pengguna" },
+    { key: "mitra", label: "mitra" }
+  ];
+
   return (
-    <div style={{ minHeight: "100vh", background: "#e8ecf5", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#e8ecf5", display: "flex", flexDirection: "column", alignItems: "center", justifyvalue: "center", padding: "24px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
       {/* Back link */}
       <a href="/" style={{ alignSelf: "flex-start", maxWidth: 420, width: "100%", color: "#5c6070", fontSize: 14, fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", gap: 6, marginBottom: 18 }}>
@@ -433,20 +448,20 @@ export default function AuthPage() {
 
         {/* Role tabs */}
         <div style={{ display: "flex", background: "#f4f5f8", borderRadius: 10, padding: 4, marginBottom: 24 }}>
-          {["pengguna", "mitra"].map(r => (
+          {rolesConfig.map(r => (
             <div
-              key={r}
-              onClick={() => setRole(r)}
+              key={r.key}
+              onClick={() => setRole(r.key)}
               style={{
                 flex: 1, textAlign: "center", padding: "9px 0", borderRadius: 8,
                 fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all .2s",
-                color: role === r ? "#3B5BFF" : "#9fa3b0",
-                background: role === r ? "#fff" : "transparent",
-                boxShadow: role === r ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                color: role === r.key ? "#3B5BFF" : "#9fa3b0",
+                background: role === r.key ? "#fff" : "transparent",
+                boxShadow: role === r.key ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
                 textTransform: "capitalize",
               }}
             >
-              {r.charAt(0).toUpperCase() + r.slice(1)}
+              {r.label}
             </div>
           ))}
         </div>

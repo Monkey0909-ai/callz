@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
@@ -91,6 +91,43 @@ const navItems = [
 ];
 
 function Sidebar({ active }) {
+  // 1. Inisialisasi state untuk menampung nama dinamis
+  const [userDisplayName, setUserDisplayName] = useState("Mitra Aktif");
+
+  // 2. Fungsi untuk mengambil data user dari localStorage
+  const loadUserData = () => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        if (parsedUser.name) {
+          setUserDisplayName(parsedUser.name);
+        } else if (parsedUser.first_name || parsedUser.last_name) {
+          setUserDisplayName(`${parsedUser.first_name || ""} ${parsedUser.last_name || ""}`.trim());
+        }
+      } catch (e) {
+        console.error("Gagal membaca profil user di Sidebar", e);
+      }
+    }
+  };
+
+  // 3. Ambil data saat komponen pertama kali dirender & pantau perubahannya
+  useEffect(() => {
+    loadUserData();
+    
+    // Mendengarkan perubahan jika ada update profil dari halaman pengaturan
+    window.addEventListener("profileUpdated", loadUserData);
+    window.addEventListener("storage", loadUserData);
+    
+    return () => {
+      window.removeEventListener("profileUpdated", loadUserData);
+      window.removeEventListener("storage", loadUserData);
+    };
+  }, []);
+
+  // 4. Buat huruf inisial otomatis dari nama depan user
+  const initialLetter = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : "M";
+
   return (
     <div style={{
       width: 200, minHeight: "100vh", background: "#fff",
@@ -114,16 +151,20 @@ function Sidebar({ active }) {
           display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 800, fontSize: 15, position: "relative",
         }}>
-          M
+          {/* Menggunakan Inisial Dinamis */}
+          {initialLetter}
           <div style={{
             position: "absolute", bottom: 1, right: 1,
             width: 10, height: 10, borderRadius: "50%",
             background: "#22c55e", border: "2px solid #fff",
           }} />
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Mitra Aktif</div>
-          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4 }}>
+        <div style={{ textAlign: "center", width: "100%", overflow: "hidden" }}>
+          {/* Menggunakan Nama Akun Dinamis */}
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+            {userDisplayName}
+          </div>
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>
             LAYANAN CONCIERGE<br />TERVERIFIKASI
           </div>
         </div>

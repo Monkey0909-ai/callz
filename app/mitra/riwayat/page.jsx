@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -81,7 +81,34 @@ function Stars({ rating }) {
   );
 }
 
+// Sidebar Component dengan state Nama Dinamis
 function Sidebar({ active }) {
+  const [userDisplayName, setUserDisplayName] = useState("Mitra Aktif");
+
+  const loadUserData = () => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        if (parsedUser.name) {
+          setUserDisplayName(parsedUser.name);
+        } else if (parsedUser.first_name || parsedUser.last_name) {
+          setUserDisplayName(`${parsedUser.first_name || ""} ${parsedUser.last_name || ""}`.trim());
+        }
+      } catch (e) {
+        console.error("Gagal memproses data user di Sidebar Riwayat", e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadUserData();
+    window.addEventListener("profileUpdated", loadUserData);
+    return () => window.removeEventListener("profileUpdated", loadUserData);
+  }, []);
+
+  const initialLetter = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : "M";
+
   return (
     <div style={{
       width: 200, minHeight: "100vh", background: "#fff",
@@ -97,17 +124,21 @@ function Sidebar({ active }) {
         margin: "0 12px 24px", background: "#f0f4ff", borderRadius: 12,
         padding: "14px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
       }}>
+        {/* Avatar Inisial Dinamis */}
         <div style={{
           width: 44, height: 44, borderRadius: "50%", background: "#2563eb", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          display: "flex", alignItems: "center", justifyCenter: "center", justifyContent: "center",
           fontWeight: 800, fontSize: 15, position: "relative",
         }}>
-          M
+          {initialLetter}
           <div style={{ position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Mitra Aktif</div>
-          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4 }}>
+        <div style={{ textAlign: "center", width: "100%", overflow: "hidden" }}>
+          {/* Teks Nama Dinamis */}
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+            {userDisplayName}
+          </div>
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>
             LAYANAN CONCIERGE<br />TERVERIFIKASI
           </div>
         </div>

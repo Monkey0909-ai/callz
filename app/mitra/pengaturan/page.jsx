@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -51,7 +51,9 @@ const navItems = [
   },
 ];
 
-function Sidebar({ active }) {
+function Sidebar({ active, userDisplayName }) {
+  const initialLetter = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : "M";
+
   return (
     <div style={{
       width: 200, minHeight: "100vh", background: "#fff",
@@ -71,12 +73,14 @@ function Sidebar({ active }) {
           display: "flex", alignItems: "center", justifyContent: "center",
           fontWeight: 800, fontSize: 15, position: "relative",
         }}>
-          M
+          {initialLetter}
           <div style={{ position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>Mitra Aktif</div>
-          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4 }}>
+        <div style={{ textAlign: "center", width: "100%", overflow: "hidden" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {userDisplayName}
+          </div>
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>
             LAYANAN CONCIERGE<br />TERVERIFIKASI
           </div>
         </div>
@@ -124,18 +128,19 @@ function Field({ label, hint, children }) {
   );
 }
 
-function Input({ value, onChange, placeholder, type = "text" }) {
+function Input({ value, onChange, placeholder, type = "text", disabled = false }) {
   return (
     <input
       type={type}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      disabled={disabled}
       style={{
         width: "100%", padding: "10px 14px", fontSize: 13,
         border: "1px solid #e5e7eb", borderRadius: 10,
-        outline: "none", fontFamily: "inherit", color: "#0f172a",
-        background: "#fff", boxSizing: "border-box",
+        outline: "none", fontFamily: "inherit", color: disabled ? "#94a3b8" : "#0f172a",
+        background: disabled ? "#f8fafc" : "#fff", boxSizing: "border-box",
       }}
     />
   );
@@ -177,14 +182,75 @@ export default function PengaturanPage() {
 
   const [saved, setSaved] = useState(false);
 
+  // Fungsi untuk membaca dan menggabungkan first_name + last_name dari pendaftaran akun
+  const loadUserData = () => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        
+        // Cek jika ada first_name & last_name hasil pendaftaran akun
+        if (parsedUser.first_name || parsedUser.last_name) {
+          setNama(`${parsedUser.first_name || ""} ${parsedUser.last_name || ""}`.trim());
+        } else if (parsedUser.name) {
+          setNama(parsedUser.name);
+        }
+
+        if (parsedUser.email) setEmail(parsedUser.email);
+        if (parsedUser.phone || parsedUser.no_telp) {
+          setTelepon(parsedUser.phone || parsedUser.no_telp);
+        }
+        if (parsedUser.city || parsedUser.kota) {
+          setKota(parsedUser.city || parsedUser.kota);
+        }
+      } catch (e) {
+        console.error("Gagal memproses data akun dari localStorage", e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadUserData();
+    
+    // Dengarkan event agar sinkron jika ada pembaruan di tab/komponen lain
+    window.addEventListener("profileUpdated", loadUserData);
+    return () => window.removeEventListener("profileUpdated", loadUserData);
+  }, []);
+
   function handleSave() {
+    const storedUser = localStorage.getItem("user");
+    let currentData = {};
+    
+    if (storedUser) {
+      try {
+        currentData = JSON.parse(storedUser);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Pisahkan kembali string nama baru ke first_name dan last_name saat disimpan
+    const nameParts = nama.trim().split(" ");
+    currentData.first_name = nameParts[0] || "";
+    currentData.last_name = nameParts.slice(1).join(" ") || "";
+    currentData.name = nama;
+    currentData.phone = telepon;
+    currentData.kota = kota;
+
+    localStorage.setItem("user", JSON.stringify(currentData));
+
+    // MEMICU EVENT: Memberitahu seluruh halaman/sidebar agar ikut berganti nama secara real-time
+    window.dispatchEvent(new Event("profileUpdated"));
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
 
+  const mainAvatarLetter = nama ? nama.charAt(0).toUpperCase() : "M";
+
   return (
     <div className={plusJakarta.className} style={{ display: "flex", minHeight: "100vh", background: "#f0f2f5" }}>
-      <Sidebar active="/mitra/pengaturan" />
+      <Sidebar active="/mitra/pengaturan" userDisplayName={nama} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Header */}
@@ -194,7 +260,7 @@ export default function PengaturanPage() {
             <p style={{ margin: "2px 0 0", fontSize: 13, color: "#64748b" }}>Kelola profil dan preferensi akun kamu</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: "#fff" }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #e5e7eb", display: "flex", alignItems: "center", cursor: "pointer", background: "#fff", justifyContent: "center" }}>
               <svg width="16" height="16" fill="none" stroke="#64748b" strokeWidth="2" viewBox="0 0 24 24">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/>
               </svg>
@@ -208,15 +274,12 @@ export default function PengaturanPage() {
 
         <div style={{ flex: 1, padding: "28px 32px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
             {/* Kolom kiri */}
             <div>
-              {/* Profil */}
               <Section title="Profil Mitra">
-                {/* Avatar */}
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
                   <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22, position: "relative" }}>
-                    M
+                    {mainAvatarLetter}
                     <div style={{ position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff" }} />
                   </div>
                   <div>
@@ -232,7 +295,7 @@ export default function PengaturanPage() {
                   <Input value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama lengkap" />
                 </Field>
                 <Field label="Email">
-                  <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" type="email" />
+                  <Input value={email} placeholder="email@example.com" type="email" disabled={true} />
                 </Field>
                 <Field label="Nomor Telepon" hint="Digunakan untuk konfirmasi tugas via WhatsApp">
                   <Input value={telepon} onChange={e => setTelepon(e.target.value)} placeholder="+62..." />
@@ -242,20 +305,16 @@ export default function PengaturanPage() {
                 </Field>
               </Section>
 
-              {/* Keamanan */}
               <Section title="Keamanan">
-                <Field label="Password Baru" hint="Kosongkan jika tidak ingin mengubah password">
-                  <Input type="password" value="" placeholder="••••••••" />
-                </Field>
-                <Field label="Konfirmasi Password">
-                  <Input type="password" value="" placeholder="••••••••" />
-                </Field>
-                <button style={{
-                  padding: "10px 18px", fontSize: 13, fontWeight: 600,
-                  background: "#f1f5f9", color: "#374151",
-                  border: "1px solid #e5e7eb", borderRadius: 10,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                  <Field label="Password Baru" hint="Kosongkan jika tetap">
+                    <Input type="password" value="" placeholder="••••••••" onChange={() => {}} />
+                  </Field>
+                  <Field label="Konfirmasi Password">
+                    <Input type="password" value="" placeholder="••••••••" onChange={() => {}} />
+                  </Field>
+                </div>
+                <button style={{ padding: "10px 18px", fontSize: 13, fontWeight: 600, background: "#f1f5f9", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
                   Ubah Password
                 </button>
               </Section>
@@ -263,7 +322,6 @@ export default function PengaturanPage() {
 
             {/* Kolom kanan */}
             <div>
-              {/* Notifikasi */}
               <Section title="Notifikasi">
                 <Toggle checked={notifTugas} onChange={setNotifTugas} label="Notifikasi update tugas" />
                 <Toggle checked={notifWA} onChange={setNotifWA} label="Notifikasi via WhatsApp" />
@@ -271,7 +329,6 @@ export default function PengaturanPage() {
                 <Toggle checked={notifPromo} onChange={setNotifPromo} label="Promo & penawaran spesial" />
               </Section>
 
-              {/* Status Akun */}
               <Section title="Status Akun">
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "#f0fdf4", borderRadius: 12, marginBottom: 16 }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
@@ -293,26 +350,15 @@ export default function PengaturanPage() {
                 </div>
               </Section>
 
-              {/* Bahaya */}
               <Section title="Zona Bahaya">
                 <p style={{ fontSize: 12, color: "#64748b", marginBottom: 14, lineHeight: 1.6, margin: "0 0 14px" }}>
                   Tindakan berikut bersifat permanen dan tidak dapat dibatalkan.
                 </p>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button style={{
-                    padding: "10px 16px", fontSize: 12, fontWeight: 600,
-                    background: "#fff", color: "#dc2626",
-                    border: "1px solid #fecaca", borderRadius: 10,
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}>
+                  <button style={{ padding: "10px 16px", fontSize: 12, fontWeight: 600, background: "#fff", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
                     Nonaktifkan Akun
                   </button>
-                  <button style={{
-                    padding: "10px 16px", fontSize: 12, fontWeight: 600,
-                    background: "#fef2f2", color: "#dc2626",
-                    border: "1px solid #fecaca", borderRadius: 10,
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}>
+                  <button style={{ padding: "10px 16px", fontSize: 12, fontWeight: 600, background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
                     Hapus Akun
                   </button>
                 </div>
