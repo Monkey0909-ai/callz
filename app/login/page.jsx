@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation"; 
 import { API } from "../../api.js";
 
-// ── Icons ────────────────────────────────────────────────────────────────────
 const LockIcon = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -56,21 +55,7 @@ const BackIcon = () => (
     <polyline points="15 18 9 12 15 6" />
   </svg>
 );
-const GoogleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24">
-    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-  </svg>
-);
-const FacebookIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
-    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-  </svg>
-);
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 function InputField({ label, icon, type = "text", placeholder, id, autoComplete, value, onChange }) {
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
@@ -134,36 +119,8 @@ function Checkbox({ label, defaultChecked = false }) {
   );
 }
 
-function SocialButtons({ label }) {
-  const btnStyle = {
-    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-    padding: "11px 0", border: "1.5px solid #e4e6ed", borderRadius: 14,
-    background: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit",
-    color: "#1a1d2e", cursor: "pointer", transition: "border-color .2s, box-shadow .2s",
-  };
-  return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
-        <div style={{ flex: 1, height: 1, background: "#e4e6ed" }} />
-        <span style={{ fontSize: 12, color: "#9fa3b0", whiteSpace: "nowrap" }}>Atau {label} dengan</span>
-        <div style={{ flex: 1, height: 1, background: "#e4e6ed" }} />
-      </div>
-      <div style={{ display: "flex", gap: 12 }}>
-        <button style={btnStyle} onMouseEnter={e => e.currentTarget.style.borderColor = "#9fa3b0"} onMouseLeave={e => e.currentTarget.style.borderColor = "#e4e6ed"}>
-          <GoogleIcon /> Google
-        </button>
-        <button style={btnStyle} onMouseEnter={e => e.currentTarget.style.borderColor = "#9fa3b0"} onMouseLeave={e => e.currentTarget.style.borderColor = "#e4e6ed"}>
-          <FacebookIcon /> Facebook
-        </button>
-      </div>
-    </>
-  );
-}
-
-// ── Login Panel ───────────────────────────────────────────────────────────────
 function LoginPanel({ onSwitch, role }) {
   const router = useRouter(); 
-  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -174,8 +131,6 @@ function LoginPanel({ onSwitch, role }) {
     setError("");
     setLoading(true);
     try {
-      // 🛠️ FIX 1: Karena key di state utama sekarang bernilai "user" atau "mitra",
-      // kita bisa langsung mengirimkan nilai role ke backend.
       const response = await fetch(API.login, {
         method: "POST",
         headers: {
@@ -192,15 +147,30 @@ function LoginPanel({ onSwitch, role }) {
         localStorage.setItem("role", data.role);
         localStorage.setItem("user", JSON.stringify(data.data));
 
-        alert("Login Berhasil!"); 
+        alert("Login Berhasil!");
 
-if (data.role === "mitra") {
-  router.push("/mitra");
-} else {
+        if (data.role === "mitra") {
+          try {
+            const statusRes = await fetch(API.verificationStatus, {
+              headers: {
+                Authorization: `Bearer ${data.token}`,
+                "ngrok-skip-browser-warning": "true",
+              },
+            });
+            const statusData = await statusRes.json();
+            const verStatus = statusData?.data?.status;
+            if (verStatus === "APPROVED") {
+              router.push("/mitra");
+            } else {
+              router.push("/mitra/verification");
+            }
+          } catch {
+            router.push("/mitra/verification");
+          }
+        } else {
           router.push("/dashboard");
         }
       } else {
-        // 🛠️ FIX 2: Menampilkan pesan spesifik dari validasi backend jika ada
         const errMsg = data?.message || (data?.errors?.role ? data.errors.role[0] : "Email atau password salah.");
         setError(errMsg);
       }
@@ -211,6 +181,7 @@ if (data.role === "mitra") {
       setLoading(false);
     }
   };
+
   return (
     <div>
       <InputField
@@ -253,12 +224,10 @@ if (data.role === "mitra") {
         Belum punya akun?{" "}
         <span onClick={onSwitch} style={{ color: "#3B5BFF", fontWeight: 700, cursor: "pointer" }}>Daftar sekarang</span>
       </p>
-      <SocialButtons label="masuk" />
     </div>
   );
 }
 
-// ── Register Panel ────────────────────────────────────────────────────────────
 function RegisterPanel({ onSwitch, role }) {
   const [firstName, setFirstName]     = useState("");
   const [lastName, setLastName]       = useState("");
@@ -271,16 +240,13 @@ function RegisterPanel({ onSwitch, role }) {
 
   const handleRegister = async () => {
     setError("");
-
     if (password !== confirmPass) {
       setError("Password dan konfirmasi password tidak cocok.");
       return;
     }
-
     setLoading(true);
     try {
       const endpoint = role === "mitra" ? API.registerMitra : API.registerUser;
-
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -288,13 +254,13 @@ function RegisterPanel({ onSwitch, role }) {
           "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify({
-  first_name: firstName,
-  last_name: lastName,
-  email,
-  phone,
-  password,
-  password_confirmation: confirmPass,
-}),
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone,
+          password,
+          password_confirmation: confirmPass,
+        }),
       });
 
       const data = await response.json();
@@ -307,7 +273,7 @@ function RegisterPanel({ onSwitch, role }) {
       }
 
       alert("Pendaftaran berhasil! Silakan masuk.");
-      onSwitch(); 
+      onSwitch();
     } catch (err) {
       console.error(err);
       setError("Terjadi kesalahan. Coba lagi.");
@@ -406,47 +372,39 @@ function RegisterPanel({ onSwitch, role }) {
         Sudah punya akun?{" "}
         <span onClick={onSwitch} style={{ color: "#3B5BFF", fontWeight: 700, cursor: "pointer" }}>Masuk di sini</span>
       </p>
-      <SocialButtons label="daftar" />
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function AuthPage() {
-  const [panel, setPanel] = useState("login");    // "login" | "daftar"
-  const [role, setRole]   = useState("user");     // "user" | "mitra"
+  const [panel, setPanel] = useState("login");
+  const [role, setRole]   = useState("user");
 
   const isLogin  = panel === "login";
   const title    = isLogin ? "Selamat Datang" : "Buat Akun";
   const subtitle = isLogin ? "Silakan masuk ke akun Anda" : "Daftarkan diri Anda sekarang";
 
-  // 🛠️ FIX 3: Definisikan mapping object untuk render UI text secara dinamis
   const rolesConfig = [
     { key: "user", label: "pengguna" },
-    { key: "mitra", label: "mitra" }
+    { key: "mitra", label: "mitra" },
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#e8ecf5", display: "flex", flexDirection: "column", alignItems: "center", justifyvalue: "center", padding: "24px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#e8ecf5", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
-      {/* Back link */}
       <a href="/" style={{ alignSelf: "flex-start", maxWidth: 420, width: "100%", color: "#5c6070", fontSize: 14, fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", gap: 6, marginBottom: 18 }}>
         <BackIcon /> Kembali ke Beranda
       </a>
 
-      {/* Card */}
       <div style={{ background: "#fff", borderRadius: 24, boxShadow: "0 8px 40px rgba(59,91,255,0.10), 0 2px 8px rgba(0,0,0,0.06)", padding: "40px 36px 36px", width: "100%", maxWidth: 420 }}>
 
-        {/* Lock icon */}
         <div style={{ width: 64, height: 64, background: "#3B5BFF", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 22px", boxShadow: "0 8px 24px rgba(59,91,255,0.30)" }}>
           <LockIcon />
         </div>
 
-        {/* Title */}
         <h1 style={{ textAlign: "center", fontSize: 26, fontWeight: 800, color: "#1a1d2e", marginBottom: 6, letterSpacing: "-0.5px" }}>{title}</h1>
         <p  style={{ textAlign: "center", fontSize: 14, color: "#9fa3b0", marginBottom: 26 }}>{subtitle}</p>
 
-        {/* Role tabs */}
         <div style={{ display: "flex", background: "#f4f5f8", borderRadius: 10, padding: 4, marginBottom: 24 }}>
           {rolesConfig.map(r => (
             <div
@@ -466,7 +424,6 @@ export default function AuthPage() {
           ))}
         </div>
 
-        {/* Auth tabs */}
         <div style={{ display: "flex", borderBottom: "2px solid #e4e6ed", marginBottom: 26 }}>
           {[{ key: "login", label: "Masuk" }, { key: "daftar", label: "Daftar" }].map(t => (
             <div
@@ -487,7 +444,6 @@ export default function AuthPage() {
           ))}
         </div>
 
-        {/* Panel */}
         {isLogin
           ? <LoginPanel role={role} onSwitch={() => setPanel("daftar")} />
           : <RegisterPanel role={role} onSwitch={() => setPanel("login")} />

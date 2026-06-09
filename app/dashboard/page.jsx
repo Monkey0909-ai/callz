@@ -1,11 +1,14 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+
+const API_BASE = 'https://generous-awake-serval.ngrok-free.app/api'
 
 const navItems = [
-  { label: 'Dashboard',   icon: '⊞', href: '/dashboard',           active: true },
-  { label: 'Riwayat',     icon: '🕐', href: '/dashboard/riwayat'               },
-  { label: 'Pengaturan',  icon: '⚙', href: '/dashboard/pengaturan'            },
+  { label: 'Dashboard',   icon: '⊞', href: '/dashboard',            active: true },
+  { label: 'Riwayat',     icon: '🕐', href: '/dashboard/riwayat'                },
+  { label: 'Pengaturan',  icon: '⚙', href: '/dashboard/pengaturan'             },
 ]
 
 const TUGAS_CEPAT = [
@@ -14,299 +17,382 @@ const TUGAS_CEPAT = [
   { icon: '⏳', label: 'Antre',                 sub: 'Permintaan mendesak' },
 ]
 
-const MITRA_TERSEDIA = [
-  { nama: 'Sarah L.',   info: '98% Rating · 1.2 mi', foto: '👩' },
-  { nama: 'Marcus J.',  info: 'Elite · 0.8 mi',      foto: '👨' },
-]
-
 export default function UserDashboard() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [firstName, setFirstName] = useState('Alex')
   const [lastName, setLastName] = useState('Santoso')
-  
-  // State baru untuk menangkap tugas aktif dari localStorage
+  const [locationStatus, setLocationStatus] = useState(null)
+  const locationSentRef = useRef(false)
+
   const [activeTask, setActiveTask] = useState(null)
   const [simulatedProgress, setSimulatedProgress] = useState(15)
   const [simulatedStatus, setSimulatedStatus] = useState('Mencari kurir terdekat untuk menjemput paket...')
+  const [activeMitras, setActiveMitras] = useState([])
+
+  const updateUserLocation = async (latitude, longitude) => {
+    try {
+      const raw = localStorage.getItem('user')
+      let token = null
+      if (raw) {
+        try { const p = JSON.parse(raw); token = p.token || p.access_token || null } catch (e) {}
+      }
+      if (!token) token = localStorage.getItem('user_token') || localStorage.getItem('token')
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch(`${API_BASE}/auth/user/update-location`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ latitude, longitude }),
+      })
+      setLocationStatus(res.ok ? 'success' : 'error')
+    } catch (e) {
+      setLocationStatus('error')
+    }
+  }
+
+  const requestAndSendLocation = () => {
+    if (!navigator.geolocation || locationSentRef.current) return
+    setLocationStatus('updating')
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        locationSentRef.current = true
+        updateUserLocation(coords.latitude, coords.longitude)
+      },
+      () => setLocationStatus('error'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
 
   const loadUserData = () => {
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
       try {
-        const parsedUser = JSON.parse(storedUser)
-        if (parsedUser.first_name) setFirstName(parsedUser.first_name)
-        if (parsedUser.last_name) setLastName(parsedUser.last_name)
-      } catch (e) {
-        console.error('Gagal mengambil data user', e)
-      }
+        const p = JSON.parse(storedUser)
+        if (p.first_name) setFirstName(p.first_name)
+        if (p.last_name)  setLastName(p.last_name)
+      } catch (e) {}
     }
+  }
+
+  const checkActiveMitras = () => {
+    try {
+      const statusData = JSON.parse(localStorage.getItem('callz_mitra_status') || '{}')
+      setActiveMitras(Object.values(statusData).filter(m => m.status === 'aktif'))
+    } catch (e) { setActiveMitras([]) }
   }
 
   const checkActiveTask = () => {
     const existingTasks = JSON.parse(localStorage.getItem('callz_tasks')) || []
-    // Mencari jika ada tugas yang statusnya masih berjalan/mencari kurir
-    const currentRunningTask = existingTasks.find(task => task.kurir === 'Mencari Kurir...')
-    
-    if (currentRunningTask) {
-      setActiveTask(currentRunningTask)
-    } else {
-      setActiveTask(null)
-    }
+    const running = existingTasks.find(t => t.kurir === 'Mencari Kurir...')
+    setActiveTask(running || null)
   }
 
   useEffect(() => {
     loadUserData()
     checkActiveTask()
+    checkActiveMitras()
+    requestAndSendLocation()
 
     window.addEventListener('profileUpdated', loadUserData)
-    return () => window.removeEventListener('profileUpdated', loadUserData)
+    window.addEventListener('storage', () => { checkActiveTask(); checkActiveMitras() })
+    return () => {
+      window.removeEventListener('profileUpdated', loadUserData)
+      window.removeEventListener('storage', checkActiveMitras)
+    }
   }, [])
 
-  // Efek simulasi pergerakan kurir & progress update secara real-time
   useEffect(() => {
-    if (!activeTask) return;
-
+    if (!activeTask) return
     const interval = setInterval(() => {
       setSimulatedProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval)
-          // Opsional: Perbarui status di localStorage ke 'Selesai' jika sudah 100%
-          const existingTasks = JSON.parse(localStorage.getItem('callz_tasks')) || []
-          const updated = existingTasks.map(t => t.id === activeTask.id ? { ...t, kurir: 'David K.', status: 'Selesai' } : t)
+          const existing = JSON.parse(localStorage.getItem('callz_tasks')) || []
+          const updated = existing.map(t =>
+            t.id === activeTask.id ? { ...t, kurir: 'David K.', status: 'Selesai' } : t
+          )
           localStorage.setItem('callz_tasks', JSON.stringify(updated))
           return 100
         }
-        
-        // Perubahan pesan status berdasarkan jangkauan progress
-        if (prev > 75) {
-          setSimulatedStatus('Kurir hampir sampai ke lokasi tujuan pengantaran.')
-        } else if (prev > 45) {
-          setSimulatedStatus('Paket berhasil diambil. Kurir sedang menuju lokasi tujuan.')
-        } else if (prev > 25) {
-          setSimulatedStatus('Kurir sudah tiba di lokasi penjemputan utama.')
-        }
-        
+        if (prev > 75) setSimulatedStatus('Kurir hampir sampai ke lokasi tujuan pengantaran.')
+        else if (prev > 45) setSimulatedStatus('Paket berhasil diambil. Kurir sedang menuju lokasi tujuan.')
+        else if (prev > 25) setSimulatedStatus('Kurir sudah tiba di lokasi penjemputan utama.')
         return prev + Math.floor(Math.random() * 15) + 5
       })
     }, 4000)
-
     return () => clearInterval(interval)
   }, [activeTask])
 
-  const fullName = `${firstName} ${lastName}`.trim()
+  const fullName      = `${firstName} ${lastName}`.trim()
   const initialLetter = firstName ? firstName.charAt(0).toUpperCase() : 'A'
 
+  const handleLogout = () => {
+    ['token','role','user','mitra_user','mitra_token','user_token','callz_tasks','callz_mitra_status']
+      .forEach(k => localStorage.removeItem(k))
+    router.push('/login')
+  }
+
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col" style={{ minHeight: 820 }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+
+      {/* ── Sidebar ── */}
+      <aside style={{ width: 210, background: '#fff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', padding: '24px 0', position: 'sticky', top: 0, height: '100vh', flexShrink: 0 }}>
+        <div style={{ padding: '0 20px 24px', fontSize: 20, fontWeight: 900, color: '#2563eb', letterSpacing: '-0.5px' }}>CallZ</div>
+
+        {/* User Box */}
+        <div style={{ margin: '0 12px 20px', background: '#f8fafc', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+            {initialLetter}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName || 'User'}</p>
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>User Pelanggan</p>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ padding: '0 10px', flex: 1 }}>
+          {navItems.map(item => (
+            <Link key={item.label} href={item.href} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 12px', borderRadius: 10, marginBottom: 2,
+              background: item.active ? '#eff6ff' : 'transparent',
+              color: item.active ? '#2563eb' : '#64748b',
+              fontWeight: item.active ? 700 : 500,
+              fontSize: 12, textDecoration: 'none',
+              textTransform: 'uppercase', letterSpacing: '0.4px',
+            }}>
+              <span style={{ fontSize: 15 }}>{item.icon}</span>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div style={{ padding: '0 12px 8px' }}>
+          <Link href="/dashboard/tugas" style={{
+            display: 'block', textAlign: 'center',
+            padding: '12px', background: '#2563eb', color: '#fff',
+            borderRadius: 12, fontSize: 14, fontWeight: 700, textDecoration: 'none',
+          }}>
+            Buat Tugas
+          </Link>
+        </div>
+
+        {/* Logout */}
+        <div style={{ padding: '8px 12px 0' }}>
+          <button
+            onClick={handleLogout}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, border: 'none', background: 'transparent', color: '#ef4444', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span>🚪</span> Keluar
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
         {/* Topbar */}
-        <header className="bg-white border-b border-gray-100 px-6 py-3 flex items-center gap-4">
-          <div className="relative flex-1 max-w-xs">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <header style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 28px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f1f5f9', borderRadius: 10, padding: '8px 14px', width: 300 }}>
+            <span style={{ color: '#94a3b8' }}>🔍</span>
             <input
-              type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Cari tugas, mitra, atau riwayat..."
-              className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, color: '#374151', width: '100%', fontFamily: 'inherit' }}
             />
           </div>
-          <div className="flex items-center gap-5 ml-auto">
-            <nav className="flex gap-5 text-sm">
-              <span className="font-bold text-blue-600 cursor-pointer">Layanan</span>
-              <span className="text-gray-500 hover:text-gray-800 cursor-pointer">Tentang</span>
-              <span className="text-gray-500 hover:text-gray-800 cursor-pointer">Bantuan</span>
-            </nav>
-            <Link
-              href="/login"
-              className="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {['Layanan', 'Tentang', 'Bantuan'].map((l, i) => (
+              <a key={l} href="#" style={{ fontSize: 13, color: i === 0 ? '#2563eb' : '#64748b', fontWeight: i === 0 ? 700 : 500, textDecoration: 'none', padding: '6px 10px' }}>{l}</a>
+            ))}
+            <button style={{ padding: '8px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', marginLeft: 4, fontFamily: 'inherit' }}>
               Mulai Sekarang
-            </Link>
+            </button>
           </div>
         </header>
 
-        <div className="flex flex-1">
-          {/* Sidebar */}
-          <aside className="w-52 bg-white border-r border-gray-100 flex flex-col py-6 px-4 flex-shrink-0">
-            <p className="font-black text-blue-600 text-xl px-2 mb-6">CallZ</p>
+        {/* Content */}
+        <div style={{ padding: '28px 32px', flex: 1, overflowY: 'auto' }}>
 
-            <div className="flex items-center gap-3 px-2 mb-8 overflow-hidden">
-              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                {initialLetter}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-sm text-gray-900 truncate m-0">{fullName || 'User'}</p>
-                <p className="text-xs text-gray-400 m-0">User Pelanggan</p>
-              </div>
-            </div>
+          {/* Hero */}
+          <div style={{ marginBottom: 28 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', margin: '0 0 6px', lineHeight: 1.25 }}>
+              Selamat datang kembali, {firstName}.<br />
+              Siap untuk <span style={{ color: '#2563eb' }}>mengembalikan waktu Anda?</span>
+            </h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>
+              Jaringan concierge pribadi Anda sudah aktif dan siap untuk misi Anda berikutnya.
+            </p>
+          </div>
 
-            <nav className="space-y-1 flex-1">
-              {navItems.map(item => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors
-                    ${item.active
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-400 hover:bg-gray-50 hover:text-gray-700'}`}
-                >
-                  <span className="text-base">{item.icon}</span>
-                  <span className="uppercase tracking-wide text-xs">{item.label}</span>
-                </Link>
-              ))}
-            </nav>
+          {/* Two-column layout */}
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
 
-            <Link
-              href="/dashboard/tugas"
-              className="bg-blue-600 text-white text-sm font-bold text-center py-3 rounded-xl hover:bg-blue-700 transition-colors block"
-            >
-              Buat Tugas
-            </Link>
-          </aside>
+            {/* Left Column */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* Main Content */}
-          <main className="flex-1 p-8 overflow-y-auto">
-            <div className="mb-8">
-              <h1 className="text-4xl font-black text-gray-900 leading-tight">
-                Selamat Datang kembali, {firstName}.<br />
-                Siap untuk{' '}
-                <span className="text-blue-600">mengembalikan waktu Anda?</span>
-              </h1>
-              <p className="text-gray-400 mt-3 text-sm">
-                Jaringan concierge pribadi Anda sudah aktif dan siap untuk misi Anda berikutnya.
-              </p>
-            </div>
-
-            <div className="flex gap-8">
-              {/* Left Column */}
-              <div className="flex-1 min-w-0 flex flex-col gap-6">
-                {/* Tugas Cepat */}
-                <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tugas Cepat</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    {TUGAS_CEPAT.map((t, i) => (
-                      <Link
-                        key={i}
-                        href="/dashboard/tugas"
-                        className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all cursor-pointer block"
+              {/* Tugas Cepat */}
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 12 }}>Tugas Cepat</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                  {TUGAS_CEPAT.map((t, i) => (
+                    <Link key={i} href="/dashboard/tugas" style={{ textDecoration: 'none' }}>
+                      <div
+                        style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '20px', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,99,235,0.10)'; e.currentTarget.style.borderColor = '#bfdbfe' }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e2e8f0' }}
                       >
-                        <div className="text-blue-500 text-2xl mb-3">{t.icon}</div>
-                        <p className="font-bold text-sm text-gray-900 mb-1 leading-tight">{t.label}</p>
-                        <p className="text-xs text-gray-400">{t.sub}</p>
-                      </Link>
-                    ))}
+                        <div style={{ fontSize: 24, marginBottom: 10, color: '#2563eb' }}>{t.icon}</div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: '0 0 4px', lineHeight: 1.3 }}>{t.label}</p>
+                        <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{t.sub}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tugas Aktif */}
+              {activeTask ? (
+                <div style={{ background: '#fff', border: '1px solid #dbeafe', borderRadius: 16, padding: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', margin: 0 }}>Tugas Aktif Terkini</p>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                      background: simulatedProgress === 100 ? '#f0fdf4' : '#fffbeb',
+                      color:      simulatedProgress === 100 ? '#16a34a' : '#d97706',
+                    }}>
+                      {simulatedProgress === 100 ? 'SELESAI' : 'DALAM PROGRESS'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                      {activeTask.icon || '📦'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTask.judul}</p>
+                      <p style={{ fontSize: 11, color: '#2563eb', fontWeight: 700, textTransform: 'uppercase', margin: '0 0 8px' }}>ID: {activeTask.id}</p>
+                      <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>Kategori: <strong style={{ color: '#374151' }}>{activeTask.kategori}</strong></p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ flex: 1, background: '#f1f5f9', borderRadius: 999, height: 8, overflow: 'hidden' }}>
+                          <div style={{ background: '#2563eb', height: '100%', borderRadius: 999, width: `${simulatedProgress}%`, transition: 'width 1s ease' }} />
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#2563eb', flexShrink: 0 }}>{simulatedProgress}%</span>
+                      </div>
+                    </div>
+                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: '12px 14px', minWidth: 200, maxWidth: 220, flexShrink: 0 }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', margin: '0 0 6px', letterSpacing: '0.5px' }}>Status Live</p>
+                      <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.6, margin: '0 0 8px' }}>{simulatedStatus}</p>
+                      <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>📍 Kurir: {simulatedProgress > 25 ? 'David K.' : 'Menuju Lokasi'}</p>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 14 }}>
+                    <Link href="/dashboard/riwayat" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '8px 16px', borderRadius: 9, border: '1px solid #e2e8f0',
+                      background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                    }}>
+                      📋 Detail Histori & Biaya
+                    </Link>
                   </div>
                 </div>
+              ) : (
+                <div style={{ background: '#f8fafc', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '40px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🤝</div>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#64748b', margin: '0 0 4px' }}>Tidak Ada Misi Berjalan</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Semua kiriman atau tugas Anda telah selesai dikerjakan oleh Mitra CallZ.</p>
+                </div>
+              )}
+            </div>
 
-                {/* Tugas Aktif — Dinamis menggunakan LocalStorage */}
-                {activeTask ? (
-                  <div className="bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tugas Aktif Terkini</p>
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${simulatedProgress === 100 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700 animate-pulse'}`}>
-                        {simulatedProgress === 100 ? 'SELESAI' : 'DALAM PROGRESS'}
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-xl flex-shrink-0">
-                        {activeTask.icon || '📦'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-gray-900 truncate">{activeTask.judul}</p>
-                        <p className="text-xs text-blue-600 font-bold uppercase mt-0.5">ID: {activeTask.id}</p>
-                        <p className="text-sm text-gray-500 mt-2">Kategori Kerja: <strong className="text-gray-700">{activeTask.kategori}</strong></p>
-                        
-                        <div className="mt-4 flex items-center gap-3">
-                          <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                            <div className="bg-blue-600 h-full rounded-full transition-all duration-1000" style={{ width: `${simulatedProgress}%` }}></div>
+            {/* Right Column */}
+            <div style={{ width: 256, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+              {/* Map */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', margin: 0 }}>Mitra di Sekitar</p>
+                  {activeMitras.length > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#f0fdf4', color: '#16a34a', padding: '2px 8px', borderRadius: 20 }}>
+                      {activeMitras.length} AKTIF
+                    </span>
+                  )}
+                </div>
+                <div style={{ width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', border: '1px solid #e2e8f0', position: 'relative', background: '#f1f5f9' }}>
+                  {activeMitras.length > 0 ? (
+                    <>
+                      <iframe
+                        src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d31869.456012356555!2d114.590111!3d-3.316694!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sid!2sid!4v1710000000000!5m2!1sid!2sid"
+                        width="100%" height="100%"
+                        style={{ border: 0, position: 'absolute', inset: 0 }}
+                        allowFullScreen="" loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                      {activeMitras.map((m, i) => {
+                        const pins = [
+                          { top: '32%', left: '40%', color: '#f97316' },
+                          { top: '55%', left: '65%', color: '#2563eb' },
+                          { top: '20%', left: '58%', color: '#9333ea' },
+                        ]
+                        const pos = pins[i % pins.length]
+                        return (
+                          <div key={i} style={{ position: 'absolute', top: pos.top, left: pos.left, transform: 'translate(-50%, -50%)', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none' }}>
+                            <div style={{ width: 28, height: 28, background: '#fff', borderRadius: '50%', border: `2.5px solid ${pos.color}`, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#374151' }}>
+                              {m.nama ? m.nama.charAt(0).toUpperCase() : '?'}
+                            </div>
                           </div>
-                          <span className="text-sm font-bold text-blue-600 flex-shrink-0">{simulatedProgress}%</span>
-                        </div>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-4 max-w-xs w-full flex flex-col gap-1">
-                        <p className="text-xs font-bold text-gray-400">STATUS LIVE</p>
-                        <p className="text-xs text-gray-700 leading-relaxed">{simulatedStatus}</p>
-                        <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-400">
-                          <span>📍</span><span>Kurir: {simulatedProgress > 25 ? 'David K.' : 'Menuju Lokasi'}</span>
-                        </div>
-                      </div>
+                        )
+                      })}
+                    </>
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 28 }}>🗺️</span>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', margin: 0 }}>Belum ada mitra aktif</p>
+                      <p style={{ fontSize: 10, color: '#cbd5e1', textAlign: 'center', margin: 0, padding: '0 16px' }}>Mitra akan muncul di sini saat mereka mengaktifkan status siap</p>
                     </div>
-                    <div className="mt-4 flex gap-2">
-                      <Link href="/dashboard/riwayat" className="border border-gray-200 text-gray-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
-                        📋 Detail Histori & Biaya
-                      </Link>
-                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tersedia Sekarang */}
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', margin: '0 0 10px' }}>Tersedia Sekarang</p>
+                {activeMitras.length === 0 ? (
+                  <div style={{ background: '#f8fafc', border: '1.5px dashed #e2e8f0', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', margin: '0 0 2px' }}>Belum ada mitra siap</p>
+                    <p style={{ fontSize: 10, color: '#cbd5e1', margin: 0 }}>Menunggu mitra mengaktifkan status</p>
                   </div>
                 ) : (
-                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
-                    <span className="text-3xl mb-2">🤝</span>
-                    <p className="text-sm font-bold text-gray-500">Tidak Ada Misi Berjalan</p>
-                    <p className="text-xs text-gray-400 mt-1 max-w-sm">Semua kiriman atau tugas Anda telah selesai dikerjakan oleh Mitra CallZ.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {activeMitras.map((m, i) => (
+                      <div key={i} style={{ background: '#fff', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>
+                          {m.nama ? m.nama.charAt(0).toUpperCase() : '?'}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: '0 0 2px' }}>{m.nama}</p>
+                          <p style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, margin: 0 }}>● Aktif & Siap</p>
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#16a34a', color: '#fff', padding: '3px 8px', borderRadius: 6 }}>SIAP</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* Right Column */}
-              <div className="w-64 flex-shrink-0">
-                {/* Map */}
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Mitra di Sekitar</p>
-                <div className="w-full h-[220px] rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner mb-6 bg-gray-100">
-                  <iframe
-                    src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d31869.456012356555!2d114.590111!3d-3.316694!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sid!2sid!4v1710000000000!5m2!1sid!2sid"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="w-full h-full absolute inset-0"
-                  ></iframe>
-
-                  {/* Simulasi Pin Mitra */}
-                  <div className="absolute top-[32%] left-[40%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-                    <div className="w-7 h-7 bg-white rounded-full border-2 border-orange-500 shadow-md flex items-center justify-center animate-bounce duration-1000">
-                      <span className="text-xs">👩</span>
-                    </div>
-                    <div className="w-3 h-1.5 bg-orange-500/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
-                  </div>
-
-                  <div className="absolute bottom-[28%] right-[25%] z-10 flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-                    <div className="w-7 h-7 bg-white rounded-full border-2 border-blue-600 shadow-md flex items-center justify-center animate-bounce" style={{ animationDelay: '200ms' }}>
-                      <span className="text-xs">👨</span>
-                    </div>
-                    <div className="w-3 h-1.5 bg-blue-600/30 rounded-full absolute -bottom-1 blur-[1px] animate-ping"></div>
-                  </div>
-
-                  <button className="absolute bottom-3 right-3 bg-white hover:bg-gray-50 p-2 rounded-xl shadow-md border border-gray-100 text-gray-500 transition-colors active:scale-95 z-10">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M20.25 3.75v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Tersedia */}
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tersedia Sekarang</p>
-                <div className="space-y-3">
-                  {MITRA_TERSEDIA.map((m, i) => (
-                    <div key={i} className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-base">{m.foto}</div>
-                      <div className="flex-1">
-                        <p className="font-bold text-sm text-gray-900">{m.nama}</p>
-                        <p className="text-xs text-gray-400">{m.info}</p>
-                      </div>
-                      <button className="bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-orange-600 transition-colors">
-                        SIAP
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
-          </main>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

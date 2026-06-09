@@ -63,7 +63,7 @@ function Section({ title, children }) {
   )
 }
 
-function ProfilPanel({ firstName, setFirstName, lastName, setLastName, email, setEmail, phone, setPhone, birthDate, setBirthDate, onSave, saveStatus }) {
+function ProfilPanel({ firstName, setFirstName, lastName, setLastName, email, setEmail, phone, setPhone, birthDate, setBirthDate, onSave, saveStatus, saveError }) {
   return (
     <>
       <Section title="Foto Profil">
@@ -83,12 +83,12 @@ function ProfilPanel({ firstName, setFirstName, lastName, setLastName, email, se
           <Field label="Nama Depan" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
           <Field label="Nama Belakang" value={lastName} onChange={(e) => setLastName(e.target.value)} />
         </div>
-        {/* Properti readOnly dilepas agar Email bisa diubah bebas */}
         <Field label="Email" value={email} onChange={(e) => setEmail(e.target.value)} type="email" hint="Gunakan alamat email aktif Anda" />
         <Field label="No. Telepon" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
         <Field label="Tanggal Lahir" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} type="date" />
         <button 
           onClick={onSave}
+          disabled={saveStatus === 'Menyimpan...'}
           style={{ 
             padding: '10px 22px', 
             background: saveStatus === 'Tersimpan!' ? '#22c55e' : '#2563eb', 
@@ -97,13 +97,15 @@ function ProfilPanel({ firstName, setFirstName, lastName, setLastName, email, se
             borderRadius: 10, 
             fontSize: 13, 
             fontWeight: 700, 
-            cursor: 'pointer', 
+            cursor: saveStatus === 'Menyimpan...' ? 'wait' : 'pointer', 
             fontFamily: 'inherit',
-            transition: 'background 0.2s'
+            transition: 'background 0.2s',
+            opacity: saveStatus === 'Menyimpan...' ? 0.7 : 1,
           }}
         >
           {saveStatus}
         </button>
+        {saveError && <p style={{ fontSize: 12, color: '#ef4444', marginTop: 10 }}>{saveError}</p>}
       </Section>
     </>
   )
@@ -222,18 +224,25 @@ function BantuanPanel() {
 
 export default function PengaturanPage() {
   const [tab, setTab] = useState('profil')
+  const [role, setRole] = useState('user')
   const [saveStatus, setSaveStatus] = useState('Simpan Perubahan')
+  const [saveError, setSaveError] = useState('')
 
-  // State untuk data profil user (Termasuk email dinamis)
-  const [firstName, setFirstName] = useState('Alex')
-  const [lastName, setLastName] = useState('Santoso')
-  const [email, setEmail] = useState('alex.santoso@email.com')
-  const [phone, setPhone] = useState('081234567890')
-  const [birthDate, setBirthDate] = useState('1995-08-20')
+  // State untuk data profil user
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [birthDate, setBirthDate] = useState('')
 
-  // Load data awal dari localStorage (Data Pendaftaran)
+  // Load data awal dari localStorage
   useEffect(() => {
-    const storedUser = localStorage.getItem('user')
+    const storedRole = localStorage.getItem('role')
+    if (storedRole) setRole(storedRole)
+
+    const storedRole2 = localStorage.getItem('role') || 'user'
+    const userKey = storedRole2 === 'mitra' ? 'mitra_data' : 'user_data'
+    const storedUser = localStorage.getItem(userKey) || localStorage.getItem('user')
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser)
@@ -241,34 +250,94 @@ export default function PengaturanPage() {
         if (parsedUser.last_name) setLastName(parsedUser.last_name)
         if (parsedUser.email) setEmail(parsedUser.email)
         if (parsedUser.phone) setPhone(parsedUser.phone)
-        if (parsedUser.birthDate) setBirthDate(parsedUser.birthDate)
+        if (parsedUser.tanggal_lahir) setBirthDate(parsedUser.tanggal_lahir)
+        else if (parsedUser.birthDate) setBirthDate(parsedUser.birthDate)
       } catch (e) {
-        console.error('Gagal memproses data pendaftaran.', e)
+        console.error('Gagal memproses data pengguna.', e)
       }
     }
   }, [])
 
-  // Aksi simpan perubahan dan sinkronisasi ke seluruh aplikasi
-  const handleSaveProfile = () => {
-    setSaveStatus('Menyimpan...')
-    const updatedUser = {
-      first_name: firstName,
-      last_name: lastName,
-      name: `${firstName} ${lastName}`.trim(),
-      email: email, // Menyimpan email baru ke localStorage
-      phone: phone,
-      birthDate: birthDate
-    }
-    
-    localStorage.setItem('user', JSON.stringify(updatedUser))
-    
-    // Picu event kustom agar sidebar langsung terupdate tanpa reload halaman
-    window.dispatchEvent(new Event('profileUpdated'))
+  // Ambil koordinat (opsional) dari browser, fallback ke null jika ditolak
+  const getCoords = () =>
+    new Promise((resolve) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) {
+        return resolve({ latitude: null, longitude: null })
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => resolve({ latitude: null, longitude: null }),
+        { timeout: 5000 }
+      )
+    })
 
-    setTimeout(() => {
+  // Aksi simpan: kirim ke API /auth/user/update lalu sinkronkan ke localStorage
+  const handleSaveProfile = async () => {
+    setSaveError('')
+    setSaveStatus('Menyimpan...')
+
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Sesi tidak ditemukan. Silakan masuk kembali.')
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL
+      if (!baseUrl) {
+        throw new Error('NEXT_PUBLIC_API_URL belum dikonfigurasi.')
+      }
+
+      const { latitude, longitude } = await getCoords()
+
+      // Bangun payload — kirim semua field profil, hanya yang terisi
+      const payload = {}
+      if (firstName) payload.first_name = firstName
+      if (lastName) payload.last_name = lastName
+      if (email) payload.email = email
+      if (phone) payload.phone = phone
+      if (birthDate) payload.tanggal_lahir = birthDate
+      if (latitude != null) payload.latitude = latitude
+      if (longitude != null) payload.longitude = longitude
+
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/auth/user/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data?.message || `Gagal menyimpan (HTTP ${res.status}).`)
+      }
+
+      // Sinkronkan data terbaru ke localStorage
+      const updatedUser = {
+        first_name: firstName,
+        last_name: lastName,
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        phone,
+        tanggal_lahir: birthDate,
+        latitude,
+        longitude,
+      }
+      const saveRole = localStorage.getItem('role') || 'user'
+      const saveKey = saveRole === 'mitra' ? 'mitra_data' : 'user_data'
+      localStorage.setItem(saveKey, JSON.stringify(updatedUser))
+      window.dispatchEvent(new Event('profileUpdated'))
+
       setSaveStatus('Tersimpan!')
       setTimeout(() => setSaveStatus('Simpan Perubahan'), 2000)
-    }, 600)
+    } catch (err) {
+      console.error('[v0] Gagal update profil:', err)
+      setSaveError(err instanceof Error ? err.message : 'Terjadi kesalahan.')
+      setSaveStatus('Simpan Perubahan')
+    }
   }
 
   const panels = {
@@ -278,7 +347,7 @@ export default function PengaturanPage() {
               email={email} setEmail={setEmail}
               phone={phone} setPhone={setPhone}
               birthDate={birthDate} setBirthDate={setBirthDate}
-              onSave={handleSaveProfile} saveStatus={saveStatus}
+              onSave={handleSaveProfile} saveStatus={saveStatus} saveError={saveError}
             />,
     notifikasi: <NotifikasiPanel />,
     keamanan:   <KeamananPanel />,
@@ -304,7 +373,7 @@ export default function PengaturanPage() {
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName || 'User'}</p>
-            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>User Pelanggan</p>
+            <p style={{ fontSize: 11, color: '#94a3b8', margin: 0 }}>{role === 'mitra' ? 'Mitra Terverifikasi' : 'User Pelanggan'}</p>
           </div>
         </div>
 

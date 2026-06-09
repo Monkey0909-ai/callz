@@ -150,11 +150,12 @@ export default function SemuaTugasPage() {
   useEffect(() => {
     loadUserData()
     loadUserTasks()
+    const handleStorage = () => { loadUserData(); loadUserTasks() }
     window.addEventListener('profileUpdated', loadUserData)
-    window.addEventListener('storage', () => { loadUserData(); loadUserTasks() })
+    window.addEventListener('storage', handleStorage)
     return () => {
       window.removeEventListener('profileUpdated', loadUserData)
-      window.removeEventListener('storage', loadUserTasks)
+      window.removeEventListener('storage', handleStorage)
     }
   }, [])
 
@@ -171,6 +172,13 @@ export default function SemuaTugasPage() {
     return okFilter && okSearch
   })
 
+  // ── Helper: normalisasi field lokasi dari berbagai kemungkinan nama ──
+  const resolvePickup = (t) =>
+    t.pickup || t.alamatPenjemputan || t.alamatJemput || t.lokasiPenjemputan || t.lokasi || t.origin || t.from || null
+
+  const resolveDestination = (t) =>
+    t.destination || t.alamatTujuan || t.tujuan || t.lokasiTujuan || t.to || t.alamatAntar || t.lokasi_tujuan || null
+
   // ── INTI: Ambil Job → update localStorage → sinkronisasi semua halaman ──
   const handleAmbilJob = (tugas) => {
     // 1. Update status di localStorage: Menunggu → Diterima
@@ -179,6 +187,9 @@ export default function SemuaTugasPage() {
       t.id === tugas.id
         ? {
             ...t,
+            // Normalisasi field lokasi agar maps bisa membaca dengan benar
+            pickup: resolvePickup(t),
+            destination: resolveDestination(t),
             // Timpa kurir dengan nama akun mitra yang sedang login
             kurir: mitraName || userDisplayName,
             inisial: mitraInisial,

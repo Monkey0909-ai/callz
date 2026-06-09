@@ -8,6 +8,18 @@ const navItems = [
   { label: 'Pengaturan',  icon: '⚙', href: '/dashboard/pengaturan' },
 ]
 
+// ── FIX #1: Definisikan mapStatus di luar komponen ──
+function mapStatus(apiStatus) {
+  const map = {
+    'PENDING':          'Menunggu',
+    'ACCEPTED':         'Diterima',
+    'COMPLETED':        'Selesai',
+    'CANCELLED':        'Dibatalkan',
+    'PROOF_SUBMITTED':  'Bukti Dikirim',
+  }
+  return map[apiStatus] ?? 'Menunggu'
+}
+
 function fmt(n) { return n === 0 ? '—' : 'Rp ' + n.toLocaleString('id-ID') }
 
 function Stars({ rating }) {
@@ -60,12 +72,16 @@ function RatingModal({ task, onClose, onSubmit }) {
   )
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL
+
 function StatusBadge({ status }) {
   const styleMap = {
-    'Selesai':    { bg: '#f0fdf4', color: '#16a34a', dot: '#22c55e' },
-    'Diterima':   { bg: '#eff6ff', color: '#2563eb', dot: '#3b82f6' },
-    'Menunggu':   { bg: '#fffbeb', color: '#d97706', dot: '#f59e0b' },
-    'Dibatalkan': { bg: '#fef2f2', color: '#dc2626', dot: '#ef4444' },
+    'Selesai':         { bg: '#f0fdf4', color: '#16a34a', dot: '#22c55e' },
+    'Diterima':        { bg: '#eff6ff', color: '#2563eb', dot: '#3b82f6' },
+    'Menunggu':        { bg: '#fffbeb', color: '#d97706', dot: '#f59e0b' },
+    'Dibatalkan':      { bg: '#fef2f2', color: '#dc2626', dot: '#ef4444' },
+    'Bukti Dikirim':   { bg: '#f0f9ff', color: '#0369a1', dot: '#0ea5e9' },
+    'PROOF_SUBMITTED': { bg: '#f0f9ff', color: '#0369a1', dot: '#0ea5e9' },
   }
   const s = styleMap[status] || styleMap['Dibatalkan']
   return (
@@ -77,93 +93,194 @@ function StatusBadge({ status }) {
 }
 
 export default function RiwayatPage() {
-  const [filter,  setFilter]  = useState('Semua')
-  const [periode, setPeriode] = useState('Semua')
-  const [search,  setSearch]  = useState('')
-  const [confirmCancel, setConfirmCancel] = useState(null) // id tugas yang mau dibatalkan
-  const [ratingModal, setRatingModal] = useState(null) // task yang mau dirating
-
-  // ── 1. UBAH DATA MENJADI STATE DINAMIS (Default Kosong []) ──
-  const [tasksData, setTasksData] = useState([])
-  
-  const [firstName, setFirstName] = useState('Alex')
-  const [lastName, setLastName] = useState('Santoso')
-
-  // ── Helper: baca ulang tasks dari localStorage ──
-  const reloadTasks = () => {
-    const storedTasks = localStorage.getItem('callz_tasks')
-    if (storedTasks) {
-      try { setTasksData(JSON.parse(storedTasks)) }
-      catch (e) { console.error('Gagal memproses data tugas', e) }
-    }
-  }
+  const [filter,       setFilter]       = useState('Semua')
+  const [periode,      setPeriode]      = useState('Semua')
+  const [search,       setSearch]       = useState('')
+  const [confirmCancel, setConfirmCancel] = useState(null)
+  const [ratingModal,  setRatingModal]  = useState(null)
+  const [tasksData,    setTasksData]    = useState([])
+  const [loading,      setLoading]      = useState(true)   // FIX #2: loading state
+  const [error,        setError]        = useState(null)   // FIX #3: error state
+  const [firstName,    setFirstName]    = useState('Alex')
+  const [lastName,     setLastName]     = useState('Santoso')
 
   useEffect(() => {
-    // ── 2. AMBIL DATA TUGAS DARI LOCALSTORAGE SAAT HALAMAN DI-LOAD ──
-    reloadTasks()
-
-    // Ambil data user profil
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
+    const fetchRiwayat = async () => {
       try {
-        const parsedUser = JSON.parse(storedUser)
-        if (parsedUser.first_name) setFirstName(parsedUser.first_name)
-        if (parsedUser.last_name) setLastName(parsedUser.last_name)
+        setLoading(true)
+        setError(null)
+
+        const token = localStorage.getItem('token')
+
+        // FIX #4: Guard jika token tidak ada
+        if (!token) {
+          setError('Sesi tidak ditemukan. Silakan login kembali.')
+          setLoading(false)
+          return
+        }
+
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL
+        const res = await fetch(`${baseUrl}/tasks/history`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+          },
+        })
+
+        // FIX #5: Cek status HTTP sebelum parse JSON
+        if (!res.ok) {
+          setError(`Gagal memuat data (HTTP ${res.status}). Coba muat ulang halaman.`)
+          setLoading(false)
+          return
+        }
+
+        const json = await res.json()
+        const raw = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : [])
+
+        // FIX #1 sudah teratasi: mapStatus sekarang terdefinisi
+        const mapped = raw.map((t) => ({
+          id:          String(t.id),
+          judul:       t.title || '—',
+          kategori:    t.category_name || '—',
+          status:      mapStatus(t.status),
+          kurir:       t.mitra?.name || null,
+          inisial:     t.mitra?.name?.charAt(0).toUpperCase() || null,
+          tanggal:     t.created_at
+                        ? new Date(t.created_at).toLocaleDateString('id-ID', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                          })
+                        : '—',
+          durasi:      '—',
+          biaya:       t.total_estimated_fee || 0,
+          rating:      t.user_rating || 0,
+          mitraRating: t.mitra_rating || 0,
+          icon:        '📦',
+        }))
+
+        setTasksData(mapped)
       } catch (e) {
-        console.error('Gagal mengambil data user', e)
+        console.error('Gagal fetch riwayat:', e)
+        setError('Terjadi kesalahan jaringan. Pastikan koneksi internet kamu aktif.')
+      } finally {
+        setLoading(false)
       }
     }
 
-    // ── Auto-refresh saat mitra ambil job (dispatch storage event) ──
-    window.addEventListener('storage', reloadTasks)
-    return () => window.removeEventListener('storage', reloadTasks)
+    fetchRiwayat()
+
+    // Ambil data user dari localStorage
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      try {
+        const p = JSON.parse(storedUser)
+        if (p.first_name) setFirstName(p.first_name)
+        if (p.last_name)  setLastName(p.last_name)
+      } catch (e) {}
+    }
   }, [])
 
-  const fullName = `${firstName} ${lastName}`.trim()
+  const fullName      = `${firstName} ${lastName}`.trim()
   const initialLetter = firstName ? firstName.charAt(0).toUpperCase() : 'A'
 
-  // ── 3. PROSES FILTER BERDASARKAN STATE TASKS_DATA DINAMIS ──
   const filtered = tasksData.filter(r => {
     const okFilter = filter === 'Semua' || r.status === filter
     const okSearch = !search ||
-      (r.judul || '').toLowerCase().includes(search.toLowerCase()) ||
-      (r.id || '').toLowerCase().includes(search.toLowerCase()) ||
-      (r.kurir || '').toLowerCase().includes(search.toLowerCase())
+      (r.judul   || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.id      || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.kurir   || '').toLowerCase().includes(search.toLowerCase())
     return okFilter && okSearch
   })
 
-  // Perhitungan statistik dinamis dengan proteksi pembagian dengan angka 0
   const totalSelesai  = tasksData.filter(r => r.status === 'Selesai').length
   const totalDiterima = tasksData.filter(r => r.status === 'Diterima').length
-  const totalBiaya    = tasksData.filter(r => r.status === 'Selesai' || r.status === 'Diterima').reduce((a, b) => a + b.biaya, 0)
+  const totalBiaya    = tasksData
+    .filter(r => r.status === 'Selesai' || r.status === 'Diterima')
+    .reduce((a, b) => a + b.biaya, 0)
   const ratingList    = tasksData.filter(r => r.rating > 0)
-  const avgRating     = ratingList.length > 0 
-    ? (ratingList.reduce((a, b) => a + b.rating, 0) / ratingList.length).toFixed(1) 
+  const avgRating     = ratingList.length > 0
+    ? (ratingList.reduce((a, b) => a + b.rating, 0) / ratingList.length).toFixed(1)
     : '0.0'
-
-  const successRate = tasksData.length > 0 
-    ? `${Math.round((totalSelesai + totalDiterima) / tasksData.length * 100)}% success rate` 
+  const successRate   = tasksData.length > 0
+    ? `${Math.round((totalSelesai + totalDiterima) / tasksData.length * 100)}% success rate`
     : '0% success rate'
 
-  const handleCancel = (id) => {
+  const handleCancel = async (id) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE}/tasks/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      })
+      if (!res.ok) { alert('Gagal membatalkan tugas. Coba lagi.'); return }
+    } catch { alert('Kesalahan jaringan.'); return }
+
     const updated = tasksData.map(t =>
       t.id === id ? { ...t, status: 'Dibatalkan' } : t
     )
     setTasksData(updated)
-    localStorage.setItem('callz_tasks', JSON.stringify(updated))
     setConfirmCancel(null)
-    // Dispatch storage event agar halaman lain (semua tugas) ikut update
-    window.dispatchEvent(new Event('storage'))
   }
 
-  const handleRate = (id, rating) => {
+  const handleRate = async (id, rating) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`${API_BASE}/tasks/${id}/rate-mitra`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ rating }),
+      })
+    } catch {}
     const updated = tasksData.map(t =>
       t.id === id ? { ...t, rating } : t
     )
     setTasksData(updated)
-    localStorage.setItem('callz_tasks', JSON.stringify(updated))
     setRatingModal(null)
-    window.dispatchEvent(new Event('storage'))
+  }
+
+  const handleConfirm = async (id) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE}/tasks/${id}/confirm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      })
+      if (!res.ok) { alert('Gagal mengkonfirmasi. Coba lagi.'); return }
+    } catch { alert('Kesalahan jaringan.'); return }
+
+    const updated = tasksData.map(t =>
+      t.id === id ? { ...t, status: 'Selesai' } : t
+    )
+    setTasksData(updated)
+  }
+
+  const handleRejectProof = async (id) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE}/tasks/${id}/reject-proof`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true',
+        },
+      })
+      if (!res.ok) { alert('Gagal menolak bukti. Coba lagi.'); return }
+    } catch { alert('Kesalahan jaringan.'); return }
+
+    const updated = tasksData.map(t =>
+      t.id === id ? { ...t, status: 'Diterima' } : t
+    )
+    setTasksData(updated)
   }
 
   return (
@@ -211,7 +328,7 @@ export default function RiwayatPage() {
 
         {/* User Box */}
         <div style={{ margin: '0 12px 20px', background: '#f8fafc', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifycontent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
             {initialLetter}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -280,9 +397,9 @@ export default function RiwayatPage() {
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
             {[
-              { label: 'Total Tugas',       value: tasksData.length,     sub: 'Sejak bergabung',    color: '#0f172a' },
-              { label: 'Berhasil',          value: totalSelesai + totalDiterima, sub: successRate,   color: '#16a34a' },
-              { label: 'Total Pengeluaran', value: fmt(totalBiaya),       sub: 'Semua waktu',        color: '#2563eb' },
+              { label: 'Total Tugas',       value: tasksData.length,            sub: 'Sejak bergabung', color: '#0f172a' },
+              { label: 'Berhasil',          value: totalSelesai + totalDiterima, sub: successRate,      color: '#16a34a' },
+              { label: 'Total Pengeluaran', value: fmt(totalBiaya),              sub: 'Semua waktu',    color: '#2563eb' },
             ].map((s, i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>{s.label}</p>
@@ -326,68 +443,128 @@ export default function RiwayatPage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  {['Tugas', 'Kurir', 'Tanggal', 'Durasi', 'Status', 'Biaya', ''].map((h, i) => (
-                    <th key={h + i} style={{ padding: '14px 16px', textAlign: i === 5 ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '48px', color: '#94a3b8', fontSize: 14 }}>📭 Tidak ada riwayat ditemukan</td></tr>
-                ) : filtered.map((r, i) => (
-                  <tr key={r.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                    <td style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{r.icon}</div>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{r.judul}</p>
-                          <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>#{r.id} · {r.kategori}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {r.status === 'Menunggu' ? (
-                        // Belum ada mitra yang ambil — tampilkan badge menunggu
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#fefce8', color: '#92400e', border: '1px dashed #fcd34d' }}>
-                          <span style={{ fontSize: 13 }}>⏳</span> Menunggu mitra...
-                        </span>
-                      ) : (
-                        // Mitra sudah ambil — tampilkan nama akun mitra
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#1d4ed8' }}>
-                            {r.inisial || (r.kurir ? r.kurir.charAt(0).toUpperCase() : '?')}
+          {/* FIX #2: Tampilkan loading & error state */}
+          {loading ? (
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '64px', textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+              <p style={{ fontSize: 14, color: '#64748b', fontWeight: 600 }}>Memuat riwayat tugas...</p>
+            </div>
+          ) : error ? (
+            <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 16, padding: '48px', textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+              <p style={{ fontSize: 14, color: '#dc2626', fontWeight: 600, marginBottom: 8 }}>{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                style={{ padding: '8px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Muat Ulang
+              </button>
+            </div>
+          ) : (
+            /* Table */
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    {['Tugas', 'Mitra', 'Tanggal', 'Durasi', 'Status', 'Biaya', 'Rating Kamu', 'Rating dari Mitra', ''].map((h, i) => (
+                      <th key={h + i} style={{ padding: '14px 16px', textAlign: i === 5 ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr><td colSpan={9} style={{ textAlign: 'center', padding: '48px', color: '#94a3b8', fontSize: 14 }}>📭 Tidak ada riwayat ditemukan</td></tr>
+                  ) : filtered.map((r, i) => (
+                    <tr key={r.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #f8fafc' : 'none' }}>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{r.icon}</div>
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{r.judul}</p>
+                            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>#{r.id} · {r.kategori}</p>
                           </div>
-                          <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{r.kurir}</span>
                         </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>{r.tanggal}</td>
-                    <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>{r.durasi}</td>
-                    <td style={{ padding: '14px 16px' }}><StatusBadge status={r.status} /></td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: r.biaya === 0 ? '#cbd5e1' : '#0f172a' }}>{fmt(r.biaya)}</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {r.status === 'Menunggu' && (
-                        <button
-                          onClick={() => setConfirmCancel(r.id)}
-                          style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
-                          onMouseEnter={e => { e.target.style.background = '#fee2e2' }}
-                          onMouseLeave={e => { e.target.style.background = '#fff5f5' }}
-                        >
-                          Batalkan
-                        </button>
-                      )}
-                      {r.status === 'Diterima' && (
-                        <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Dalam proses</span>
-                      )}
-                      {r.status === 'Selesai' && (
-                        r.rating ? (
-                          <span style={{ color: '#f59e0b', fontSize: 14 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        {r.status === 'Menunggu' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#fefce8', color: '#92400e', border: '1px dashed #fcd34d' }}>
+                            <span style={{ fontSize: 13 }}>⏳</span> Menunggu mitra...
+                          </span>
                         ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#1d4ed8' }}>
+                              {r.inisial || (r.kurir ? r.kurir.charAt(0).toUpperCase() : '?')}
+                            </div>
+                            <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{r.kurir || '—'}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>{r.tanggal}</td>
+                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>{r.durasi}</td>
+                      <td style={{ padding: '14px 16px' }}><StatusBadge status={r.status} /></td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: r.biaya === 0 ? '#cbd5e1' : '#0f172a' }}>{fmt(r.biaya)}</td>
+
+                      {/* Kolom: Rating Kamu ke Mitra */}
+                      <td style={{ padding: '14px 16px' }}>
+                        {r.status === 'Selesai' ? (
+                          r.rating
+                            ? <span style={{ color: '#f59e0b', fontSize: 14 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                            : <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>Belum dinilai</span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: '#d1d5db' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Kolom: Rating dari Mitra ke User */}
+                      <td style={{ padding: '14px 16px' }}>
+                        {r.mitraRating ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ color: '#10b981', fontSize: 14 }}>{'★'.repeat(r.mitraRating)}{'☆'.repeat(5 - r.mitraRating)}</span>
+                            <span style={{ fontSize: 10, color: '#94a3b8' }}>{['','Sangat Buruk','Kurang Memuaskan','Cukup','Bagus','Luar Biasa!'][r.mitraRating]}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
+                            {r.status === 'Selesai' ? 'Belum dinilai' : '—'}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Kolom: Aksi */}
+                      <td style={{ padding: '14px 16px' }}>
+                        {r.status === 'Menunggu' && (
+                          <button
+                            onClick={() => setConfirmCancel(r.id)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                            onMouseEnter={e => { e.target.style.background = '#fee2e2' }}
+                            onMouseLeave={e => { e.target.style.background = '#fff5f5' }}
+                          >
+                            Batalkan
+                          </button>
+                        )}
+                        {r.status === 'Diterima' && (
+                          <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Dalam proses</span>
+                        )}
+                        {(r.status === 'Bukti Dikirim' || r.status === 'PROOF_SUBMITTED') && (
+                          <div style={{ display: 'flex', gap: 6, flexDirection: 'column' }}>
+                            <button
+                              onClick={() => handleConfirm(r.id)}
+                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                              onMouseEnter={e => { e.target.style.background = '#dcfce7' }}
+                              onMouseLeave={e => { e.target.style.background = '#f0fdf4' }}
+                            >
+                              ✓ Konfirmasi
+                            </button>
+                            <button
+                              onClick={() => handleRejectProof(r.id)}
+                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                              onMouseEnter={e => { e.target.style.background = '#fee2e2' }}
+                              onMouseLeave={e => { e.target.style.background = '#fff5f5' }}
+                            >
+                              ✗ Tolak Bukti
+                            </button>
+                          </div>
+                        )}
+                        {r.status === 'Selesai' && !r.rating && (
                           <button
                             onClick={() => setRatingModal(r)}
                             style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#d97706', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
@@ -396,23 +573,26 @@ export default function RiwayatPage() {
                           >
                             ⭐ Beri Rating
                           </button>
-                        )
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        )}
+                        {r.status === 'Selesai' && r.rating && (
+                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Selesai</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: 12, color: '#94a3b8' }}>Menampilkan {filtered.length} dari {tasksData.length} riwayat</p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['← Sebelumnya', 'Berikutnya →'].map(b => (
-                  <button key={b} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>{b}</button>
-                ))}
+              <div style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 12, color: '#94a3b8' }}>Menampilkan {filtered.length} dari {tasksData.length} riwayat</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['← Sebelumnya', 'Berikutnya →'].map(b => (
+                    <button key={b} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>{b}</button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

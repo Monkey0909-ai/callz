@@ -51,7 +51,7 @@ const navItems = [
   },
 ];
 
-function Sidebar({ active, userDisplayName }) {
+function Sidebar({ active, userDisplayName, role }) {
   const initialLetter = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : "M";
 
   return (
@@ -81,7 +81,7 @@ function Sidebar({ active, userDisplayName }) {
             {userDisplayName}
           </div>
           <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>
-            LAYANAN CONCIERGE<br />TERVERIFIKASI
+            {role === 'mitra' ? 'MITRA TERVERIFIKASI' : 'PENGGUNA'}
           </div>
         </div>
       </div>
@@ -170,10 +170,11 @@ function Toggle({ checked, onChange, label }) {
 }
 
 export default function PengaturanPage() {
-  const [nama, setNama] = useState("Mitra Aktif");
-  const [email, setEmail] = useState("mitra@callz.id");
-  const [telepon, setTelepon] = useState("+62 812 3456 7890");
-  const [kota, setKota] = useState("Banjarmasin");
+  const [nama, setNama] = useState("");
+  const [role, setRole] = useState("user");
+  const [email, setEmail] = useState("");
+  const [telepon, setTelepon] = useState("");
+  const [kota, setKota] = useState("");
 
   const [notifTugas, setNotifTugas] = useState(true);
   const [notifPromo, setNotifPromo] = useState(false);
@@ -184,6 +185,8 @@ export default function PengaturanPage() {
 
   // Fungsi untuk membaca dan menggabungkan first_name + last_name dari pendaftaran akun
   const loadUserData = () => {
+    const storedRole = localStorage.getItem("role");
+    if (storedRole) setRole(storedRole);
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       try {
@@ -250,7 +253,7 @@ export default function PengaturanPage() {
 
   return (
     <div className={plusJakarta.className} style={{ display: "flex", minHeight: "100vh", background: "#f0f2f5" }}>
-      <Sidebar active="/mitra/pengaturan" userDisplayName={nama} />
+      <Sidebar active="/mitra/pengaturan" userDisplayName={nama} role={role} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Header */}
@@ -276,7 +279,7 @@ export default function PengaturanPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             {/* Kolom kiri */}
             <div>
-              <Section title="Profil Mitra">
+              <Section title={role === 'mitra' ? 'Profil Mitra' : 'Profil Pengguna'}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
                   <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22, position: "relative" }}>
                     {mainAvatarLetter}
@@ -284,7 +287,7 @@ export default function PengaturanPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{nama}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>LAYANAN CONCIERGE TERVERIFIKASI</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{role === 'mitra' ? 'MITRA TERVERIFIKASI' : 'PENGGUNA'}</div>
                     <button style={{ marginTop: 6, fontSize: 12, color: "#2563eb", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
                       Ganti Foto
                     </button>
@@ -333,7 +336,7 @@ export default function PengaturanPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "#f0fdf4", borderRadius: 12, marginBottom: 16 }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>Akun Terverifikasi</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>{role === 'mitra' ? 'Mitra Terverifikasi' : 'Pengguna Aktif'}</div>
                     <div style={{ fontSize: 11, color: "#16a34a", marginTop: 1 }}>Mitra aktif sejak Januari 2026</div>
                   </div>
                 </div>

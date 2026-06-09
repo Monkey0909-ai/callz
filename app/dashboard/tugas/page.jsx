@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 const KATEGORI_LIST = [
@@ -17,10 +17,103 @@ function fmt(n) {
   return "Rp " + n.toLocaleString("id-ID");
 }
 
+// Database koordinat lokal (sama dengan yang dipakai di MapPlaceholder)
+const LOCAL_POI_COORDS = {
+  'duta mall': { lat: -3.3248, lon: 114.5911 },
+  'duta mall banjarmasin': { lat: -3.3248, lon: 114.5911 },
+  'siring': { lat: -3.3317, lon: 114.5925 },
+  'menara pandang': { lat: -3.3320, lon: 114.5930 },
+  'pasar lama': { lat: -3.3287, lon: 114.5897 },
+  'pasar baru': { lat: -3.3254, lon: 114.5862 },
+  'pasar sudimampir': { lat: -3.3260, lon: 114.5870 },
+  'pasar antasari': { lat: -3.3195, lon: 114.5832 },
+  'pasar sentra antasari': { lat: -3.3195, lon: 114.5832 },
+  'rsud ulin': { lat: -3.3131, lon: 114.5818 },
+  'rs ulin': { lat: -3.3131, lon: 114.5818 },
+  'rumah sakit ulin': { lat: -3.3131, lon: 114.5818 },
+  'rs sultan suriansyah': { lat: -3.2890, lon: 114.5651 },
+  'rs bhayangkara': { lat: -3.3120, lon: 114.6020 },
+  'rs islam': { lat: -3.3350, lon: 114.6100 },
+  'banjarmasin trade center': { lat: -3.3190, lon: 114.5920 },
+  'btc': { lat: -3.3190, lon: 114.5920 },
+  'transmart': { lat: -3.3150, lon: 114.6050 },
+  'ahmad yani': { lat: -3.3186, lon: 114.5944 },
+  'jl ahmad yani': { lat: -3.3186, lon: 114.5944 },
+  'lambung mangkurat': { lat: -3.3280, lon: 114.5900 },
+  'pangeran antasari': { lat: -3.3195, lon: 114.5832 },
+  'hasanuddin hm': { lat: -3.3120, lon: 114.5750 },
+  'gatot subroto': { lat: -3.3050, lon: 114.5980 },
+  'a yani km 1': { lat: -3.3180, lon: 114.5930 },
+  'a yani km 2': { lat: -3.3150, lon: 114.5970 },
+  'a yani km 3': { lat: -3.3120, lon: 114.6010 },
+  'a yani km 4': { lat: -3.3090, lon: 114.6050 },
+  'a yani km 5': { lat: -3.3060, lon: 114.6090 },
+  'a yani km 6': { lat: -3.3020, lon: 114.6130 },
+  'kayutangi': { lat: -3.3020, lon: 114.5810 },
+  'uin antasari': { lat: -3.2990, lon: 114.5820 },
+  'unlam': { lat: -3.2990, lon: 114.5820 },
+  'ulm': { lat: -3.2990, lon: 114.5820 },
+  'poliban': { lat: -3.2980, lon: 114.5900 },
+  'banjarmasin utara': { lat: -3.2950, lon: 114.5900 },
+  'banjarmasin barat': { lat: -3.3300, lon: 114.5700 },
+  'banjarmasin timur': { lat: -3.3200, lon: 114.6100 },
+  'banjarmasin selatan': { lat: -3.3500, lon: 114.5900 },
+  'banjarmasin tengah': { lat: -3.3250, lon: 114.5900 },
+  'pekauman': { lat: -3.3400, lon: 114.5850 },
+  'kuin': { lat: -3.3100, lon: 114.5680 },
+  'kelayan': { lat: -3.3500, lon: 114.5800 },
+  'mantuil': { lat: -3.3700, lon: 114.5850 },
+  'pemurus': { lat: -3.3600, lon: 114.6000 },
+  'pemurus baru': { lat: -3.3580, lon: 114.5980 },
+  'landasan ulin': { lat: -3.4420, lon: 114.7580 },
+  'banjarbaru': { lat: -3.4417, lon: 114.8275 },
+  'martapura': { lat: -3.4122, lon: 114.8640 },
+  'gambut': { lat: -3.4010, lon: 114.7330 },
+  'kertak hanyar': { lat: -3.3880, lon: 114.6750 },
+  'terminal km 6': { lat: -3.3020, lon: 114.6130 },
+  'bandara syamsudin noor': { lat: -3.4424, lon: 114.7630 },
+  'pelabuhan trisakti': { lat: -3.3120, lon: 114.5620 },
+  'masjid raya sabilal muhtadin': { lat: -3.3315, lon: 114.5910 },
+  'masjid raya': { lat: -3.3315, lon: 114.5910 },
+  'sabilal muhtadin': { lat: -3.3315, lon: 114.5910 },
+  'taman siring': { lat: -3.3317, lon: 114.5925 },
+  'q mall': { lat: -3.3190, lon: 114.6080 },
+  'big mall': { lat: -3.3190, lon: 114.6080 },
+  'mall ratu indah': { lat: -3.3248, lon: 114.5911 },
+};
+
+// Haversine formula — menghitung jarak garis lurus antar dua koordinat (km)
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Cari koordinat dari nama lokasi di database lokal
+function cariKoordinat(addr) {
+  if (!addr) return null;
+  const key = addr.toLowerCase().trim().replace(/\s+/g, ' ');
+  for (const [k, coords] of Object.entries(LOCAL_POI_COORDS)) {
+    if (key.includes(k) || k.includes(key)) return coords;
+  }
+  return null;
+}
+
 function hitungSimulasiJarak(pickup, destination) {
   if (!pickup || !destination) return 0;
-  const gabung = pickup.length + destination.length;
-  return (gabung % 13) + 2; 
+  const coordA = cariKoordinat(pickup);
+  const coordB = cariKoordinat(destination);
+  if (coordA && coordB) {
+    // Jarak nyata × 1.3 sebagai faktor koreksi rute jalan (tidak lurus)
+    const jarakLurus = haversineKm(coordA.lat, coordA.lon, coordB.lat, coordB.lon);
+    return Math.max(1, Math.round(jarakLurus * 1.3));
+  }
+  // Fallback jika lokasi tidak dikenali: estimasi 3 km
+  return 3;
 }
 
 function Stepper({ step }) {
@@ -51,46 +144,257 @@ function Stepper({ step }) {
   );
 }
 
-function MapPlaceholder({ pickup, destination }) {
-  let mapUrl = "https://maps.google.com/maps?q=Banjarmasin&t=&z=13&ie=UTF8&iwloc=&output=embed";
+// ── MapView: Leaflet + Nominatim geocoding + OSRM real route ──
+function MapPlaceholder({ pickup, destination, onJarakUpdate }) {
+  const mapRef = useRef(null)
+  const instanceRef = useRef(null)
+  const [status, setStatus] = useState('idle')
+  const hasData = !!(pickup || destination)
 
-  // Perbaikan interpolasi string `${}` yang sebelumnya rusak
-  if (pickup && destination) {
-    mapUrl = `https://maps.google.com/maps?saddr=${encodeURIComponent(pickup)}&daddr=${encodeURIComponent(destination)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
-  } else if (pickup) {
-    mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(pickup)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
-  } else if (destination) {
-    mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(destination)}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
-  }
+  useEffect(() => {
+    if (instanceRef.current) { instanceRef.current.remove(); instanceRef.current = null }
+    if (!hasData || !mapRef.current) { setStatus('idle'); return }
+
+    let isMounted = true
+    setStatus('loading')
+
+    const init = async () => {
+      if (!document.getElementById('leaflet-css-tugas')) {
+        const link = document.createElement('link')
+        link.id = 'leaflet-css-tugas'
+        link.rel = 'stylesheet'
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+        document.head.appendChild(link)
+      }
+
+      const L = (await import('leaflet')).default
+      if (!isMounted || !mapRef.current) return
+
+      delete L.Icon.Default.prototype._getIconUrl
+      L.Icon.Default.mergeOptions({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      })
+
+      const map = L.map(mapRef.current, { scrollWheelZoom: false, zoomControl: true })
+        .setView([-3.3186, 114.5944], 13)
+      instanceRef.current = map
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map)
+
+      const geocode = async (addr) => {
+        // ── 1. Database lokal tempat-tempat Banjarmasin ──
+        const LOCAL_POI = {
+          'duta mall': { lat: -3.3248, lon: 114.5911 },
+          'duta mall banjarmasin': { lat: -3.3248, lon: 114.5911 },
+          'siring': { lat: -3.3317, lon: 114.5925 },
+          'siring banjarmasin': { lat: -3.3317, lon: 114.5925 },
+          'siring duta mall': { lat: -3.3248, lon: 114.5911 },
+          'menara pandang': { lat: -3.3320, lon: 114.5930 },
+          'pasar lama': { lat: -3.3287, lon: 114.5897 },
+          'pasar baru': { lat: -3.3254, lon: 114.5862 },
+          'pasar sudimampir': { lat: -3.3260, lon: 114.5870 },
+          'pasar antasari': { lat: -3.3195, lon: 114.5832 },
+          'pasar sentra antasari': { lat: -3.3195, lon: 114.5832 },
+          'rsud ulin': { lat: -3.3131, lon: 114.5818 },
+          'rs ulin': { lat: -3.3131, lon: 114.5818 },
+          'rumah sakit ulin': { lat: -3.3131, lon: 114.5818 },
+          'rs sultan suriansyah': { lat: -3.2890, lon: 114.5651 },
+          'rs bhayangkara': { lat: -3.3120, lon: 114.6020 },
+          'rs islam': { lat: -3.3350, lon: 114.6100 },
+          'puskesmas pekauman': { lat: -3.3350, lon: 114.5870 },
+          'banjarmasin trade center': { lat: -3.3190, lon: 114.5920 },
+          'btc': { lat: -3.3190, lon: 114.5920 },
+          'mitra plaza': { lat: -3.3230, lon: 114.5880 },
+          'hero supermarket': { lat: -3.3240, lon: 114.5900 },
+          'transmart': { lat: -3.3150, lon: 114.6050 },
+          'hypermart': { lat: -3.3248, lon: 114.5911 },
+          'lippo plaza': { lat: -3.3248, lon: 114.5911 },
+          'ahmad yani': { lat: -3.3186, lon: 114.5944 },
+          'jl ahmad yani': { lat: -3.3186, lon: 114.5944 },
+          'jalan ahmad yani': { lat: -3.3186, lon: 114.5944 },
+          'lambung mangkurat': { lat: -3.3280, lon: 114.5900 },
+          'jl lambung mangkurat': { lat: -3.3280, lon: 114.5900 },
+          'pangeran antasari': { lat: -3.3195, lon: 114.5832 },
+          'jl pangeran antasari': { lat: -3.3195, lon: 114.5832 },
+          'hasanuddin hm': { lat: -3.3120, lon: 114.5750 },
+          'jl hasanuddin': { lat: -3.3120, lon: 114.5750 },
+          'gatot subroto': { lat: -3.3050, lon: 114.5980 },
+          'jl gatot subroto': { lat: -3.3050, lon: 114.5980 },
+          'a yani km 1': { lat: -3.3180, lon: 114.5930 },
+          'a yani km 2': { lat: -3.3150, lon: 114.5970 },
+          'a yani km 3': { lat: -3.3120, lon: 114.6010 },
+          'a yani km 4': { lat: -3.3090, lon: 114.6050 },
+          'a yani km 5': { lat: -3.3060, lon: 114.6090 },
+          'a yani km 6': { lat: -3.3020, lon: 114.6130 },
+          'kayutangi': { lat: -3.3020, lon: 114.5810 },
+          'kayu tangi': { lat: -3.3020, lon: 114.5810 },
+          'uin antasari': { lat: -3.2990, lon: 114.5820 },
+          'unlam': { lat: -3.2990, lon: 114.5820 },
+          'ulm': { lat: -3.2990, lon: 114.5820 },
+          'universitas lambung mangkurat': { lat: -3.2990, lon: 114.5820 },
+          'poliban': { lat: -3.2980, lon: 114.5900 },
+          'banjarmasin utara': { lat: -3.2950, lon: 114.5900 },
+          'banjarmasin barat': { lat: -3.3300, lon: 114.5700 },
+          'banjarmasin timur': { lat: -3.3200, lon: 114.6100 },
+          'banjarmasin selatan': { lat: -3.3500, lon: 114.5900 },
+          'banjarmasin tengah': { lat: -3.3250, lon: 114.5900 },
+          'pekauman': { lat: -3.3400, lon: 114.5850 },
+          'kuin': { lat: -3.3100, lon: 114.5680 },
+          'kelayan': { lat: -3.3500, lon: 114.5800 },
+          'mantuil': { lat: -3.3700, lon: 114.5850 },
+          'pemurus': { lat: -3.3600, lon: 114.6000 },
+          'pemurus baru': { lat: -3.3580, lon: 114.5980 },
+          'landasan ulin': { lat: -3.4420, lon: 114.7580 },
+          'banjarbaru': { lat: -3.4417, lon: 114.8275 },
+          'martapura': { lat: -3.4122, lon: 114.8640 },
+          'gambut': { lat: -3.4010, lon: 114.7330 },
+          'kertak hanyar': { lat: -3.3880, lon: 114.6750 },
+          'terminal km 6': { lat: -3.3020, lon: 114.6130 },
+          'terminal antasari': { lat: -3.3195, lon: 114.5832 },
+          'bandara syamsudin noor': { lat: -3.4424, lon: 114.7630 },
+          'pelabuhan trisakti': { lat: -3.3120, lon: 114.5620 },
+          'masjid raya sabilal muhtadin': { lat: -3.3315, lon: 114.5910 },
+          'masjid raya': { lat: -3.3315, lon: 114.5910 },
+          'sabilal muhtadin': { lat: -3.3315, lon: 114.5910 },
+          'taman siring': { lat: -3.3317, lon: 114.5925 },
+          'taman maskot': { lat: -3.3200, lon: 114.6000 },
+          'stadion 17 mei': { lat: -3.3100, lon: 114.5950 },
+          'gedung paman birin': { lat: -3.3250, lon: 114.5850 },
+          'kantor gubernur': { lat: -3.3250, lon: 114.5850 },
+          'balai kota': { lat: -3.3270, lon: 114.5860 },
+          'mall ratu indah': { lat: -3.3248, lon: 114.5911 },
+          'q mall': { lat: -3.3190, lon: 114.6080 },
+          'big mall': { lat: -3.3190, lon: 114.6080 },
+        }
+
+        // Cek database lokal dulu (case-insensitive, strip spasi ekstra)
+        const key = addr.toLowerCase().trim()
+          .replace(/^(jl\.|jalan|jl)\s+/, 'jl ')
+          .replace(/\s+/g, ' ')
+        for (const [k, coords] of Object.entries(LOCAL_POI)) {
+          if (key.includes(k) || k.includes(key)) return coords
+        }
+
+        // ── 2. Fallback ke Nominatim dengan multiple query ──
+        const queries = [
+          addr + ', Banjarmasin, Kalimantan Selatan, Indonesia',
+          addr + ', Banjarmasin, Indonesia',
+          addr + ', Kalimantan Selatan, Indonesia',
+          addr + ', Indonesia',
+        ]
+        for (const q of queries) {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=id`,
+              { headers: { 'Accept-Language': 'id' } }
+            )
+            const data = await res.json()
+            if (data?.[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+          } catch {}
+        }
+        return null
+      }
+
+      const [pickupCoords, destCoords] = await Promise.all([
+        pickup ? geocode(pickup) : Promise.resolve(null),
+        destination ? geocode(destination) : Promise.resolve(null),
+      ])
+
+      if (!isMounted || !instanceRef.current) return
+
+      const greenIcon = L.divIcon({
+        html: `<div style="position:relative;width:32px;height:40px;"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:10px solid #16a34a;"></div><div style="background:#16a34a;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.35);">📍</div></div>`,
+        iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -40], className: ''
+      })
+      const redIcon = L.divIcon({
+        html: `<div style="position:relative;width:32px;height:40px;"><div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:10px solid #dc2626;"></div><div style="background:#dc2626;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.35);">🏁</div></div>`,
+        iconSize: [32, 40], iconAnchor: [16, 40], popupAnchor: [0, -40], className: ''
+      })
+
+      if (pickupCoords) L.marker([pickupCoords.lat, pickupCoords.lon], { icon: greenIcon }).addTo(map).bindPopup(`<b>📍 Penjemputan</b><br/>${pickup}`)
+      if (destCoords) L.marker([destCoords.lat, destCoords.lon], { icon: redIcon }).addTo(map).bindPopup(`<b>🏁 Tujuan</b><br/>${destination}`)
+
+      if (pickupCoords && destCoords) {
+        try {
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${pickupCoords.lon},${pickupCoords.lat};${destCoords.lon},${destCoords.lat}?overview=full&geometries=geojson`
+          const routeRes = await fetch(osrmUrl)
+          const routeData = await routeRes.json()
+          if (!isMounted || !instanceRef.current) return
+
+          if (routeData.code === 'Ok' && routeData.routes?.[0]) {
+            const coords = routeData.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon])
+            const routeLine = L.polyline(coords, { color: '#2563eb', weight: 5, opacity: 0.85 }).addTo(map)
+            map.fitBounds(routeLine.getBounds(), { padding: [30, 30] })
+
+            const dist = (routeData.routes[0].distance / 1000).toFixed(1)
+            const dur = Math.round(routeData.routes[0].duration / 60)
+
+            // ── Kirim jarak OSRM nyata ke parent untuk hitung ongkir ──
+            if (onJarakUpdate) onJarakUpdate(parseFloat(dist))
+
+            const infoBox = L.control({ position: 'bottomleft' })
+            infoBox.onAdd = () => {
+              const div = L.DomUtil.create('div')
+              div.innerHTML = `<div style="background:white;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.2);color:#1e40af;">🛣️ ${dist} km &nbsp;·&nbsp; ⏱ ~${dur} menit</div>`
+              return div
+            }
+            infoBox.addTo(map)
+          } else {
+            L.polyline([[pickupCoords.lat, pickupCoords.lon], [destCoords.lat, destCoords.lon]], { color: '#2563eb', weight: 4, dashArray: '8,5', opacity: 0.7 }).addTo(map)
+            map.fitBounds(L.latLngBounds([[pickupCoords.lat, pickupCoords.lon], [destCoords.lat, destCoords.lon]]), { padding: [30, 30] })
+          }
+        } catch {
+          L.polyline([[pickupCoords.lat, pickupCoords.lon], [destCoords.lat, destCoords.lon]], { color: '#2563eb', weight: 4, dashArray: '8,5', opacity: 0.7 }).addTo(instanceRef.current)
+          instanceRef.current.fitBounds(L.latLngBounds([[pickupCoords.lat, pickupCoords.lon], [destCoords.lat, destCoords.lon]]), { padding: [30, 30] })
+        }
+      } else if (pickupCoords) {
+        map.setView([pickupCoords.lat, pickupCoords.lon], 15)
+      } else if (destCoords) {
+        map.setView([destCoords.lat, destCoords.lon], 15)
+      }
+
+      if (isMounted) setStatus('ready')
+    }
+
+    init().catch(() => { if (isMounted) setStatus('error') })
+
+    return () => {
+      isMounted = false
+      if (instanceRef.current) { instanceRef.current.remove(); instanceRef.current = null }
+    }
+  }, [pickup, destination])
 
   return (
-    <div style={{
-      borderRadius: 12, height: "100%", minHeight: 280,
-      position: "relative", overflow: "hidden",
-      border: "1px solid #E2E8F0", background: "#E5E7EB"
-    }}>
-      <iframe
-        key={mapUrl} 
-        src={mapUrl}
-        width="100%"
-        height="100%"
-        style={{ border: 0, position: "absolute", inset: 0 }}
-        allowFullScreen=""
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      ></iframe>
-
-      <div style={{
-        position: "absolute", bottom: 12, left: 12,
-        background: "rgba(255, 255, 255, 0.95)", border: "1px solid #E2E8F0",
-        borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600,
-        display: "flex", alignItems: "center", gap: 6, color: "#0F172A",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.15)", pointerEvents: "none", zIndex: 10
-      }}>
-        🗺️ {pickup && destination ? "Garis rute perjalanan aktif!" : "Masukkan lokasi asal & tujuan..."}
-      </div>
+    <div style={{ borderRadius: 12, height: "100%", minHeight: 280, position: "relative", overflow: "hidden", border: "1px solid #E2E8F0" }}>
+      {/* Placeholder saat belum ada input */}
+      {!hasData && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#F8FAFF", gap: 8, zIndex: 10 }}>
+          <span style={{ fontSize: 32 }}>🗺️</span>
+          <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>Masukkan lokasi asal &amp; tujuan...</span>
+        </div>
+      )}
+      {/* Loading spinner */}
+      {status === 'loading' && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(248,250,252,0.85)", zIndex: 9999, gap: 8 }}>
+          <div style={{ width: 28, height: 28, border: "3px solid #2563eb", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Memuat rute...</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        </div>
+      )}
+      {/* Status bar bawah */}
+      {status === 'ready' && (
+        <div style={{ position: "absolute", bottom: 12, left: 12, background: "rgba(255,255,255,0.95)", border: "1px solid #E2E8F0", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, color: "#0F172A", boxShadow: "0 2px 6px rgba(0,0,0,0.15)", pointerEvents: "none", zIndex: 10 }}>
+          🗺️ Rute perjalanan aktif!
+        </div>
+      )}
+      <div ref={mapRef} style={{ width: "100%", height: "100%", minHeight: 280 }} />
     </div>
-  );
+  )
 }
 
 function CostSummary({ data }) {
@@ -107,8 +411,10 @@ function CostSummary({ data }) {
   }
 
   const kat = KATEGORI_LIST.find(k => k.id === data.kategori) || KATEGORI_LIST[0];
-  const jarak = hitungSimulasiJarak(data.pickup, data.destination);
-  const biayaJarak = jarak * TARIF_PER_KM;
+  // Pakai jarak OSRM nyata jika sudah tersedia, fallback ke Haversine
+  const jarak = data.jarakOSRM != null ? data.jarakOSRM : hitungSimulasiJarak(data.pickup, data.destination);
+  const jarakLabel = data.jarakOSRM != null ? jarak.toFixed(1) : jarak;
+  const biayaJarak = Math.round(jarak * TARIF_PER_KM);
   const total = BASE_FEE + kat.extra + biayaJarak + data.extraFee;
 
   return (
@@ -119,7 +425,11 @@ function CostSummary({ data }) {
       </div>
       <Row label="Biaya Layanan Dasar" value={fmt(BASE_FEE)} />
       <Row label="Kategori Kerja" value={`+${fmt(kat.extra)}`} badge={kat.label} badgeColor={kat.badge} valueColor={kat.extra > 0 ? "#EF4444" : "#0F172A"} />
-      <Row label={`Ongkir Jarak (${jarak} km)`} value={`+${fmt(biayaJarak)}`} valueColor="#10B981" />
+      <Row
+        label={`Ongkir Jarak (${jarakLabel} km${data.jarakOSRM != null ? ' · rute nyata' : ' · estimasi'})`}
+        value={`+${fmt(biayaJarak)}`}
+        valueColor="#10B981"
+      />
       <Row label="Biaya Tambahan (Tips)" value={`+${fmt(data.extraFee)}`} />
       
       <div style={{ borderTop: "1px solid #F1F5F9", marginTop: 14, paddingTop: 14 }}>
@@ -127,7 +437,7 @@ function CostSummary({ data }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <span style={{ fontSize: 26, fontWeight: 900, color: "#2563EB", letterSpacing: -0.5 }}>{fmt(total)}</span>
           <span style={{ fontSize: 11, color: "#94A3B8", maxWidth: 120, textAlign: "right", lineHeight: 1.4 }}>
-            Tarif final sudah termasuk hitungan jarak rute jalan.
+            {data.jarakOSRM != null ? "Tarif berdasarkan rute jalan OSRM." : "Menunggu konfirmasi rute dari peta."}
           </span>
         </div>
       </div>
@@ -182,16 +492,20 @@ function StepLokasi({ data, setData, onNext }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
           <FormField label="Alamat Penjemputan" required>
-            <input style={inputStyle} placeholder="Contoh: Duta Mall Banjarmasin" value={data.pickup} onChange={e => setData(p => ({ ...p, pickup: e.target.value }))} />
+            <input style={inputStyle} placeholder="Contoh: Duta Mall Banjarmasin" value={data.pickup} onChange={e => setData(p => ({ ...p, pickup: e.target.value, jarakOSRM: null }))} />
           </FormField>
           <FormField label="Alamat Tujuan" required>
-            <input style={inputStyle} placeholder="Contoh: Menara Pandang Banjarmasin" value={data.destination} onChange={e => setData(p => ({ ...p, destination: e.target.value }))} />
+            <input style={inputStyle} placeholder="Contoh: Menara Pandang Banjarmasin" value={data.destination} onChange={e => setData(p => ({ ...p, destination: e.target.value, jarakOSRM: null }))} />
           </FormField>
           <FormField label="Catatan Lokasi">
             <input style={inputStyle} placeholder="Patokan, lantai, nomor gedung..." value={data.locationNote} onChange={e => setData(p => ({ ...p, locationNote: e.target.value }))} />
           </FormField>
         </div>
-        <MapPlaceholder pickup={data.pickup} destination={data.destination} />
+        <MapPlaceholder
+          pickup={data.pickup}
+          destination={data.destination}
+          onJarakUpdate={km => setData(p => ({ ...p, jarakOSRM: km }))}
+        />
       </div>
       <NavBar onBack={null} onNext={onNext} nextDisabled={!ok} nextLabel="Lanjut ke Detail →" />
     </div>
@@ -257,15 +571,60 @@ function StepInstruksi({ data, setData, onBack, onSubmit, loading }) {
               <input style={{ ...inputStyle, background: "#F8FAFF" }} value={data.telepon} disabled />
             </FormField>
           </div>
-          <FormField label="Biaya Tambahan">
-            <input style={inputStyle} placeholder="Rp 0"
-              value={data.extraFee === 0 ? "Rp 0" : "Rp " + data.extraFee.toLocaleString("id-ID")}
-              onChange={e => { const num = parseInt(e.target.value.replace(/\D/g, "")) || 0; setData(p => ({ ...p, extraFee: num })); }}
-            />
+          <FormField label="Biaya Tambahan (Tips Opsional)">
+            <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+              {[0, 2000, 5000, 10000, 20000].map(nominal => (
+                <button
+                  key={nominal}
+                  type="button"
+                  onClick={() => setData(p => ({ ...p, extraFee: nominal }))}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 20,
+                    border: data.extraFee === nominal ? "2px solid #2563EB" : "1.5px solid #E2E8F0",
+                    background: data.extraFee === nominal ? "#EFF6FF" : "white",
+                    color: data.extraFee === nominal ? "#2563EB" : "#475569",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {nominal === 0 ? "Tidak" : fmt(nominal)}
+                </button>
+              ))}
+            </div>
+            <div style={{ position: "relative" }}>
+              <span style={{
+                position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+                fontSize: 14, color: "#94A3B8", fontWeight: 600, pointerEvents: "none",
+              }}>Rp</span>
+              <input
+                style={{ ...inputStyle, paddingLeft: 36 }}
+                placeholder="0"
+                inputMode="numeric"
+                value={data.extraFee === 0 ? "" : data.extraFee.toLocaleString("id-ID")}
+                onChange={e => {
+                  const raw = e.target.value.replace(/\./g, "").replace(/\D/g, "");
+                  const num = parseInt(raw) || 0;
+                  setData(p => ({ ...p, extraFee: num }));
+                }}
+              />
+            </div>
+            {data.extraFee > 0 && (
+              <p style={{ fontSize: 11, color: "#10B981", fontWeight: 600, marginTop: 4 }}>
+                ✓ Tips {fmt(data.extraFee)} akan ditambahkan ke total
+              </p>
+            )}
           </FormField>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <MapPlaceholder pickup={data.pickup} destination={data.destination} />
+          <MapPlaceholder
+            pickup={data.pickup}
+            destination={data.destination}
+            onJarakUpdate={km => setData(p => ({ ...p, jarakOSRM: km }))}
+          />
           <CostSummary data={data} />
         </div>
       </div>
@@ -283,8 +642,10 @@ function StepPembayaran({ data, onBack, onSubmit, loading }) {
   const [confirmed, setConfirmed] = useState(false);
 
   const kat = KATEGORI_LIST.find(k => k.id === data.kategori) || KATEGORI_LIST[0];
-  const jarak = hitungSimulasiJarak(data.pickup, data.destination);
-  const biayaJarak = jarak * TARIF_PER_KM;
+  // Pakai jarak OSRM nyata jika tersedia, fallback ke Haversine
+  const jarak = data.jarakOSRM != null ? data.jarakOSRM : hitungSimulasiJarak(data.pickup, data.destination);
+  const jarakLabel = data.jarakOSRM != null ? parseFloat(jarak).toFixed(1) : jarak;
+  const biayaJarak = Math.round(jarak * TARIF_PER_KM);
   const total = BASE_FEE + kat.extra + biayaJarak + data.extraFee;
 
   const handlePay = () => {
@@ -390,7 +751,7 @@ function StepPembayaran({ data, onBack, onSubmit, loading }) {
             <p style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>Ringkasan Pesanan</p>
             <Row label="Layanan Dasar"             value={fmt(BASE_FEE)} />
             <Row label={`Kategori (${kat.label})`} value={`+${fmt(kat.extra)}`} />
-            <Row label={`Ongkir (${jarak} km)`}    value={`+${fmt(biayaJarak)}`} valueColor="#10B981" />
+            <Row label={`Ongkir (${jarakLabel} km)`}    value={`+${fmt(biayaJarak)}`} valueColor="#10B981" />
             <Row label="Tips"                       value={`+${fmt(data.extraFee)}`} />
             <div style={{ borderTop: "1.5px solid #F1F5F9", marginTop: 12, paddingTop: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -507,28 +868,93 @@ export default function TugasPage() {
     pickup: "", destination: "", locationNote: "",
     judulTugas: "", instruksi: "", jenisPaket: "", 
     namaPenerima: "", telepon: "", kategori: "ringan", extraFee: 0,
+    jarakOSRM: null,
   });
   const [lastSavedTask, setLastSavedTask] = useState(null);
 
-  // ── FUNGSIONALITAS UTAMA: MENYIMPAN KE LOCALSTORAGE ──
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setLoad(true);
 
-    setTimeout(() => {
-      const kat = KATEGORI_LIST.find(k => k.id === data.kategori) || KATEGORI_LIST[0];
-      const jarak = hitungSimulasiJarak(data.pickup, data.destination);
-      const biayaJarak = jarak * TARIF_PER_KM;
-      const totalBiaya = BASE_FEE + kat.extra + biayaJarak + data.extraFee;
+    const kat = KATEGORI_LIST.find(k => k.id === data.kategori) || KATEGORI_LIST[0];
+    const jarak = data.jarakOSRM != null ? data.jarakOSRM : hitungSimulasiJarak(data.pickup, data.destination);
+    const biayaJarak = Math.round(jarak * TARIF_PER_KM);
+    const totalBiaya = BASE_FEE + kat.extra + biayaJarak + data.extraFee;
 
-      // Hitung durasi estimasi dari jarak (asumsi kecepatan rata-rata 30 km/jam)
+    const PAKET_ID = { Belanja: 1, Dokumen: 2, Paket: 3, Antre: 4 };
+    const KATEGORI_ID = { ringan: 1, sedang: 2, berat: 3, khusus: 4 };
+
+    const coordPickup = cariKoordinat(data.pickup) || { lat: 0, lon: 0 };
+    const coordDest   = cariKoordinat(data.destination) || { lat: 0, lon: 0 };
+
+    const payload = {
+
+      package_category_id:    PAKET_ID[data.jenisPaket] ?? 3,
+      job_category_id:        KATEGORI_ID[data.kategori] ?? 1,
+      pickup_address:         data.pickup,
+      pickup_latitude:        coordPickup.lat,
+      pickup_longitude:       coordPickup.lon,
+      destination_address:    data.destination,
+      destination_latitude:   coordDest.lat,
+      destination_longitude:  coordDest.lon,
+
+      title:                  data.judulTugas,
+      instruction_detail:     data.instruksi || "",
+      receiver_name:          data.namaPenerima || "",
+      receiver_phone:         data.telepon,
+
+      base_fee:               BASE_FEE,
+      job_category_fee:       kat.extra,
+      distance_km:            parseFloat(jarak),
+      distance_fee:           biayaJarak,
+      tips_fee:               data.extraFee,
+      discount:               0,
+      total_estimated_fee:    totalBiaya,
+    };
+
+    let token = null;
+    try {
+      const raw = localStorage.getItem("user") || localStorage.getItem("mitra_user");
+      if (raw) {
+        const p = JSON.parse(raw);
+        token = p.token || p.access_token || null;
+      }
+    } catch (_) {}
+    if (!token) token = localStorage.getItem("token") || localStorage.getItem("mitra_token");
+
+    try {
+
+      console.log("[CallZ] POST /api/tasks payload:", JSON.stringify(payload, null, 2));
+      console.log("[CallZ] Token tersedia:", !!token);
+
+      const res = await fetch("https://generous-awake-serval.ngrok-free.app/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",          
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const rawText = await res.text().catch(() => "");
+      let resData = {};
+      try { resData = JSON.parse(rawText); } catch (_) {}
+
+      if (!res.ok) {
+        console.error("Gagal membuat tugas [" + res.status + "]:", rawText);
+        alert(resData?.message || `Gagal membuat tugas (HTTP ${res.status}). Coba lagi.`);
+        setLoad(false);
+        return;
+      }
+
       const menitPerjalanan = Math.round((jarak / 30) * 60);
       const durasiLabel = menitPerjalanan < 60
         ? `${menitPerjalanan} menit`
         : `${Math.floor(menitPerjalanan / 60)} jam ${menitPerjalanan % 60} menit`;
 
-      // Kurir DIKOSONGKAN — akan diisi nama akun mitra saat mereka ambil job
       const taskFormatRiwayat = {
-        id: "CZ-" + Math.floor(Math.random() * 900 + 100),
+        id: resData?.data?.id ? "CZ-" + resData.data.id : "CZ-" + Math.floor(Math.random() * 900 + 100),
         icon: data.jenisPaket === "Belanja" ? "🛒" : data.jenisPaket === "Dokumen" ? "📄" : data.jenisPaket === "Antre" ? "⏳" : "📦",
         judul: data.judulTugas,
         kategori: data.jenisPaket,
@@ -540,7 +966,6 @@ export default function TugasPage() {
         status: "Menunggu",
         rating: 0,
         biaya: totalBiaya,
-        // ── Data lokasi & instruksi untuk peta rute mitra ──
         pickup: data.pickup,
         destination: data.destination,
         locationNote: data.locationNote,
@@ -549,22 +974,25 @@ export default function TugasPage() {
         telepon: data.telepon,
       };
 
-      // Ambil data lama, gabungkan, lalu simpan kembali
       const existingTasks = JSON.parse(localStorage.getItem("callz_tasks")) || [];
-      const updatedTasks = [taskFormatRiwayat, ...existingTasks];
-      localStorage.setItem("callz_tasks", JSON.stringify(updatedTasks));
+      localStorage.setItem("callz_tasks", JSON.stringify([taskFormatRiwayat, ...existingTasks]));
 
       setLastSavedTask(taskFormatRiwayat);
       setLoad(false);
       setDone(true);
-    }, 1200);
+
+    } catch (err) {
+      console.error("Network error:", err);
+      alert("Terjadi kesalahan jaringan. Coba lagi.");
+      setLoad(false);
+    }
   };
 
   const reset = () => {
     setDone(false); 
     setStep(1);
     setLastSavedTask(null);
-    setData({ pickup: "", destination: "", locationNote: "", judulTugas: "", instruksi: "", jenisPaket: "", namaPenerima: "", telepon: "", kategori: "ringan", extraFee: 0 });
+    setData({ pickup: "", destination: "", locationNote: "", judulTugas: "", instruksi: "", jenisPaket: "", namaPenerima: "", telepon: "", kategori: "ringan", extraFee: 0, jarakOSRM: null });
   };
 
   return (

@@ -45,12 +45,21 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+        
         <div className="flex-1 grid grid-cols-2 gap-3">
-          <div className="bg-blue-50 rounded-2xl h-44 flex items-center justify-center text-5xl">📦</div>
-          <div className="bg-gray-100 rounded-2xl h-44 flex items-center justify-center text-5xl">🛍️</div>
-          <div className="bg-green-50 rounded-2xl h-44 flex items-center justify-center text-5xl">🥦</div>
-          <div className="bg-orange-50 rounded-2xl h-44 flex items-center justify-center text-5xl">🛵</div>
-        </div>
+  <div className="bg-blue-50 rounded-2xl h-44 overflow-hidden">
+    <img src="/images/foto1.jpg" alt="Paket" className="w-full h-full object-cover rounded-2xl" />
+  </div>
+  <div className="bg-gray-100 rounded-2xl h-44 overflow-hidden">
+    <img src="/images/foto2.jpg" alt="Belanja" className="w-full h-full object-cover rounded-2xl" />
+  </div>
+  <div className="bg-green-50 rounded-2xl h-44 overflow-hidden">
+    <img src="/images/foto3.jpg" alt="Sayur" className="w-full h-full object-cover rounded-2xl" />
+  </div>
+  <div className="bg-orange-50 rounded-2xl h-44 overflow-hidden">
+    <img src="/images/foto4.jpg" alt="Motor" className="w-full h-full object-cover rounded-2xl" />
+  </div>
+</div>
       </section>
 
       {/* Layanan Unggulan */}
@@ -128,14 +137,7 @@ export default function HomePage() {
       <section className="bg-gray-100 py-16 text-center px-8">
         <h2 className="text-3xl font-black uppercase mb-3">Siap Memulai Hari yang Lebih Produktif?</h2>
         <p className="text-gray-500 mb-8">Download aplikasi CallZ sekarang dan biarkan kami mengurus semua detail kecil hidup Anda.</p>
-        <div className="flex justify-center gap-4 flex-wrap">
-          <button className="bg-gray-900 text-white font-semibold px-6 py-3 rounded-lg hover:bg-black transition-colors flex items-center gap-2">
-            📲 Download App
-          </button>
-          <button className="border-2 border-gray-400 text-gray-700 font-semibold px-6 py-3 rounded-lg hover:border-gray-600 transition-colors flex items-center gap-2">
-            💬 Hubungi Kami
-          </button>
-        </div>
+      
       </section>
 
       {/* Footer */}
