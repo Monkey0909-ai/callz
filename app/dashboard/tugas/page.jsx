@@ -151,8 +151,19 @@ function MapPlaceholder({ pickup, destination, onJarakUpdate }) {
   const [status, setStatus] = useState('idle')
   const hasData = !!(pickup || destination)
 
+  // Safe destroy: stop animation sebelum remove agar tidak muncul _leaflet_pos error
+  const destroyMap = () => {
+    if (!instanceRef.current) return
+    try {
+      const m = instanceRef.current
+      instanceRef.current = null
+      if (m._mapPane) m._mapPane.style.transition = 'none'
+      m.remove()
+    } catch (_) {}
+  }
+
   useEffect(() => {
-    if (instanceRef.current) { instanceRef.current.remove(); instanceRef.current = null }
+    destroyMap()
     if (!hasData || !mapRef.current) { setStatus('idle'); return }
 
     let isMounted = true
@@ -177,8 +188,14 @@ function MapPlaceholder({ pickup, destination, onJarakUpdate }) {
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       })
 
-      const map = L.map(mapRef.current, { scrollWheelZoom: false, zoomControl: true })
-        .setView([-3.3186, 114.5944], 13)
+      const map = L.map(mapRef.current, {
+        scrollWheelZoom: false,
+        zoomControl: true,
+        // Matikan animasi zoom — sumber utama _leaflet_pos crash saat unmount
+        zoomAnimation: false,
+        fadeAnimation: false,
+        markerZoomAnimation: false,
+      }).setView([-3.3186, 114.5944], 13)
       instanceRef.current = map
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -365,7 +382,7 @@ function MapPlaceholder({ pickup, destination, onJarakUpdate }) {
 
     return () => {
       isMounted = false
-      if (instanceRef.current) { instanceRef.current.remove(); instanceRef.current = null }
+      destroyMap()
     }
   }, [pickup, destination])
 
