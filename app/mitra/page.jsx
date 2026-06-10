@@ -345,6 +345,24 @@ export default function MitraDashboard() {
     } catch (e) { console.warn('[CallZ] Gagal fetch active task:', e) }
   }
 
+const fetchMitraProfile = async () => {
+  const headers = getAuthHeaders()
+  if (!headers.Authorization) return
+  try {
+    const res = await fetch(`${API_BASE}/auth/mitra/me`, { headers })
+    if (!res.ok) return
+    const json = await res.json()
+    const profile = json.mitra ?? json.data ?? json  // ← fix di sini
+    const avg = profile.rating ? parseFloat(profile.rating) : null
+    setMitraRating({
+      avg:   avg ? avg.toFixed(1) : null,
+      count: 0,
+    })
+  } catch (e) {
+    console.warn('[CallZ] Gagal fetch profile mitra:', e)
+  }
+}
+
   const fetchAvailableTasks = async () => {
     const headers = getAuthHeaders()
     if (!headers.Authorization) { setTasksError('Sesi tidak ditemukan, silakan login ulang.'); setTasksLoading(false); return }
@@ -360,16 +378,25 @@ export default function MitraDashboard() {
   }
 
   const fetchMitraIncome = async () => {
-    setMitraIncome(prev => ({ ...prev, loading: true, error: false }))
-    try {
-      const headers = getAuthHeaders()
-      const today = new Date(), yyyy = today.getFullYear(), mm = String(today.getMonth()+1).padStart(2,'0'), dd = String(today.getDate()).padStart(2,'0')
-      const todayStr = `${yyyy}-${mm}-${dd}`, firstOfMonth = `${yyyy}-${mm}-01`
-      const [rH, rB, rT] = await Promise.all([fetch(`${API_BASE}/mitra/omzet?from=${todayStr}&to=${todayStr}`, { headers }), fetch(`${API_BASE}/mitra/omzet?from=${firstOfMonth}&to=${todayStr}`, { headers }), fetch(`${API_BASE}/mitra/omzet`, { headers })])
-      const [h, b, t] = await Promise.all([rH.ok ? rH.json() : null, rB.ok ? rB.json() : null, rT.ok ? rT.json() : null])
-      setMitraIncome({ omzet_hari_ini: h?.data?.omzet ?? null, omzet_bulan_ini: b?.data?.omzet ?? null, total_omzet: t?.data?.omzet ?? null, total_completed_tasks: t?.data?.total_completed_tasks ?? null, loading: false, error: false })
-    } catch { setMitraIncome(prev => ({ ...prev, loading: false, error: true })) }
+  setMitraIncome(prev => ({ ...prev, loading: true, error: false }))
+  try {
+    const headers = getAuthHeaders()
+    const res = await fetch(`${API_BASE}/mitra/omzet`, { headers })
+    if (!res.ok) throw new Error('Gagal fetch omzet')
+    const json = await res.json()
+    const data = json.data ?? {}
+    setMitraIncome({
+      omzet_hari_ini:        data.pendapatan_hari_ini   ?? null,
+      omzet_bulan_ini:       null,   // endpoint belum sediakan ini
+      total_omzet:           null,   // endpoint belum sediakan ini
+      total_completed_tasks: data.tugas_diselesaikan    ?? null,
+      loading: false,
+      error: false,
+    })
+  } catch {
+    setMitraIncome(prev => ({ ...prev, loading: false, error: true }))
   }
+}
 
   const updateLocationToServer = async (latitude, longitude) => {
     try { const res = await fetch(`${API_BASE}/auth/mitra/update-location`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ latitude, longitude }) }); setLocationStatus(res.ok ? 'success' : 'error') } catch { setLocationStatus('error') }
@@ -417,9 +444,27 @@ export default function MitraDashboard() {
     if (!headers.Authorization) { setProofError('Sesi tidak ditemukan. Silakan login ulang.'); return }
     setProofLoading(true); setProofError('')
     try {
-      const formData = new FormData(); formData.append('proof_of_work', proofFile)
-      const res = await fetch(`${API_BASE}/mitra/tasks/${activeTask.id}/submit-proof`, { method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true', Authorization: headers.Authorization }, body: formData })
-      if (!res.ok) { const err = await res.json().catch(() => ({})); setProofError(err?.message || 'Gagal mengirim bukti.'); setProofLoading(false); return }
+
+    const formData = new FormData()
+formData.append('proof_of_work', proofFile) 
+
+const res = await fetch(`${API_BASE}/mitra/tasks/${activeTask.id}/submit-proof`, {
+  method: 'POST',
+  headers: {
+    'accept': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    Authorization: headers.Authorization
+  },
+  body: formData
+})
+
+if (!res.ok) {
+  const err = await res.json().catch(() => ({}))
+  console.log('[DEBUG] submit-proof error:', err)  // ← tambah ini
+  setProofError(err?.message || err?.error || JSON.stringify(err) || 'Gagal mengirim bukti.')
+  setProofLoading(false)
+  return
+}
       setProofFile(null); setProofLoading(false); await fetchActiveTask()
     } catch { setProofError('Kesalahan jaringan. Coba lagi.'); setProofLoading(false) }
   }
@@ -429,7 +474,7 @@ export default function MitraDashboard() {
     stopLocationTracking(); router.push('/login')
   }
 
-  useEffect(() => { loadUserData(); fetchActiveTask(); fetchAvailableTasks(); fetchMitraIncome(); return () => stopLocationTracking() }, [])
+  useEffect(() => { loadUserData(); fetchActiveTask(); fetchMitraProfile(); fetchAvailableTasks(); fetchMitraIncome(); return () => stopLocationTracking() }, [])
 
   return (
     <div className={plusJakarta.className} style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f5' }}>
@@ -519,7 +564,6 @@ export default function MitraDashboard() {
                     <div style={{ fontSize: 30, fontWeight: 800, color: '#f59e0b', lineHeight: 1 }}>{mitraRating.avg}</div>
                     <span style={{ color: '#f59e0b', fontSize: 16 }}>{'★'.repeat(Math.round(mitraRating.avg))}<span style={{ color: '#d1d5db' }}>{'★'.repeat(5 - Math.round(mitraRating.avg))}</span></span>
                   </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5 }}>Dari {mitraRating.count} ulasan</div>
                 </>
               ) : (
                 <>

@@ -1,5 +1,7 @@
 const BASE_URL = "https://generous-awake-serval.ngrok-free.app/api";
- 
+// const BASE_URL = "https://grkx9mvm-8000.asse.devtunnels.ms/api";
+const STORAGE_BASE = "https://generous-awake-serval.ngrok-free.app/storage";
+// const STORAGE_BASE = "https://grkx9mvm-8000.asse.devtunnels.ms/storage";
 export const API = {
   // Auth - Register
   registerUser:  `${BASE_URL}/auth/user/register`,
@@ -24,8 +26,16 @@ export const API = {
   adminVerifications:    `${BASE_URL}/admin/verifications`,
   adminVerificationById: (id) => `${BASE_URL}/admin/verifications/${id}`,
   adminUpdateStatus:     (id) => `${BASE_URL}/admin/verifications/${id}/status`,
+
+  
 };
- 
+ export const getStorageUrl = (path) => {
+  if (!path) return null;
+  // Kalau sudah full URL, langsung return
+  if (path.startsWith("http")) return path;
+  // Buang leading slash kalau ada
+  return `${STORAGE_BASE}/${path.replace(/^\//, "")}`;
+};
 
 
 

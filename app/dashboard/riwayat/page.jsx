@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { NgrokImage } from '@/components/NgrokImage'
 
 const navItems = [
   { label: 'Dashboard',   icon: '⊞', href: '/dashboard' },
@@ -8,7 +9,10 @@ const navItems = [
   { label: 'Pengaturan',  icon: '⚙', href: '/dashboard/pengaturan' },
 ]
 
-// ── FIX #1: Definisikan mapStatus di luar komponen ──
+const STORAGE_BASE = process.env.NEXT_PUBLIC_API_URL
+  ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') + '/storage'
+  : ''
+
 function mapStatus(apiStatus) {
   const map = {
     'PENDING':          'Menunggu',
@@ -27,6 +31,108 @@ function Stars({ rating }) {
   return <span style={{ color: '#f59e0b', fontSize: 14 }}>{'★'.repeat(rating)}{'☆'.repeat(5 - rating)}</span>
 }
 
+/* ── Proof Photo Modal ── */
+function ProofModal({ task, onClose, onConfirm, onReject }) {
+  const [zoomed, setZoomed] = useState(false)
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 480, boxShadow: '0 24px 64px rgba(0,0,0,0.22)', overflow: 'hidden' }}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>Bukti Penyelesaian</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0' }}>
+              {task.judul} · oleh <strong style={{ color: '#374151' }}>{task.kurir || 'Mitra'}</strong>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', lineHeight: 1 }}
+          >×</button>
+        </div>
+
+        {/* Photo Area — pakai NgrokImage */}
+        <div
+          style={{ background: '#f1f5f9', position: 'relative', minHeight: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: task.proof_url ? 'zoom-in' : 'default' }}
+          onClick={() => { if (task.proof_url) setZoomed(true) }}
+        >
+          {task.proof_url ? (
+            <>
+              <NgrokImage
+                src={task.proof_url}
+                alt="Bukti penyelesaian"
+                style={{ width: '100%', maxHeight: 360, objectFit: 'contain', display: 'block' }}
+                fallbackText="Gagal memuat foto bukti"
+              />
+              <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 11, borderRadius: 6, padding: '3px 8px', fontWeight: 600, pointerEvents: 'none' }}>
+                🔍 Klik untuk perbesar
+              </div>
+            </>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <div style={{ fontSize: 44, marginBottom: 10 }}>📷</div>
+              <p style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>Foto bukti belum tersedia</p>
+              <p style={{ fontSize: 11, color: '#cbd5e1', marginTop: 4 }}>Mitra belum mengunggah foto bukti</p>
+            </div>
+          )}
+        </div>
+
+        {/* Catatan mitra */}
+        {task.proof_note && (
+          <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', background: '#fffbeb' }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Catatan Mitra</p>
+            <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{task.proof_note}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ padding: '16px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => onReject(task.id)}
+            style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1.5px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff5f5'}
+          >
+            ✗ Tolak Bukti
+          </button>
+          <button
+            onClick={() => onConfirm(task.id)}
+            style={{ flex: 1.4, padding: '11px', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
+          >
+            ✓ Konfirmasi Selesai
+          </button>
+        </div>
+      </div>
+
+      {/* Zoom overlay — juga pakai NgrokImage */}
+      {zoomed && task.proof_url && (
+        <div
+          onClick={() => setZoomed(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: 24 }}
+        >
+          <NgrokImage
+            src={task.proof_url}
+            alt="Bukti penyelesaian (full)"
+            style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,255,255,0.1)' }}
+          />
+          <button
+            onClick={() => setZoomed(false)}
+            style={{ position: 'fixed', top: 20, right: 20, width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}
+          >×</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Rating Modal ── */
 function RatingModal({ task, onClose, onSubmit }) {
   const [hovered, setHovered] = useState(0)
   const [selected, setSelected] = useState(task.rating || 0)
@@ -93,16 +199,17 @@ function StatusBadge({ status }) {
 }
 
 export default function RiwayatPage() {
-  const [filter,       setFilter]       = useState('Semua')
-  const [periode,      setPeriode]      = useState('Semua')
-  const [search,       setSearch]       = useState('')
+  const [filter,        setFilter]        = useState('Semua')
+  const [periode,       setPeriode]       = useState('Semua')
+  const [search,        setSearch]        = useState('')
   const [confirmCancel, setConfirmCancel] = useState(null)
-  const [ratingModal,  setRatingModal]  = useState(null)
-  const [tasksData,    setTasksData]    = useState([])
-  const [loading,      setLoading]      = useState(true)   // FIX #2: loading state
-  const [error,        setError]        = useState(null)   // FIX #3: error state
-  const [firstName,    setFirstName]    = useState('Alex')
-  const [lastName,     setLastName]     = useState('Santoso')
+  const [ratingModal,   setRatingModal]   = useState(null)
+  const [proofModal,    setProofModal]    = useState(null)
+  const [tasksData,     setTasksData]     = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState(null)
+  const [firstName,     setFirstName]     = useState('Alex')
+  const [lastName,      setLastName]      = useState('Santoso')
 
   useEffect(() => {
     const fetchRiwayat = async () => {
@@ -112,7 +219,6 @@ export default function RiwayatPage() {
 
         const token = localStorage.getItem('token')
 
-        // FIX #4: Guard jika token tidak ada
         if (!token) {
           setError('Sesi tidak ditemukan. Silakan login kembali.')
           setLoading(false)
@@ -124,11 +230,10 @@ export default function RiwayatPage() {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
+            'ngrok-skip-browser-warning': '6024', // Header khusus untuk bypass splash page ngrok, jika diperlukan
           },
         })
 
-        // FIX #5: Cek status HTTP sebelum parse JSON
         if (!res.ok) {
           setError(`Gagal memuat data (HTTP ${res.status}). Coba muat ulang halaman.`)
           setLoading(false)
@@ -138,7 +243,6 @@ export default function RiwayatPage() {
         const json = await res.json()
         const raw = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : [])
 
-        // FIX #1 sudah teratasi: mapStatus sekarang terdefinisi
         const mapped = raw.map((t) => ({
           id:          String(t.id),
           judul:       t.title || '—',
@@ -156,6 +260,20 @@ export default function RiwayatPage() {
           rating:      t.user_rating || 0,
           mitraRating: t.mitra_rating || 0,
           icon:        '📦',
+
+          // Bangun URL proof — prioritaskan yang sudah full URL, fallback ke STORAGE_BASE
+          proof_url: (() => {
+              const raw = t.proof_of_work || t.proof_of_work_url || t.proof_url || t.proof_photo_url || null
+              if (!raw) return null
+              if (raw.startsWith('http')) {
+                  // Ekstrak path setelah /storage/ lalu route lewat API
+                  const match = raw.match(/\/storage\/(.+)/)
+                  return match ? `${API_BASE}/file/${match[1]}` : raw
+              }
+              return `${API_BASE}/file/${raw.replace(/^\//, '')}`
+          })(),
+
+          proof_note: t.proof_note || t.mitra_note || t.completion_note || null,
         }))
 
         setTasksData(mapped)
@@ -169,7 +287,6 @@ export default function RiwayatPage() {
 
     fetchRiwayat()
 
-    // Ambil data user dari localStorage
     const storedUser = localStorage.getItem('user')
     if (storedUser) {
       try {
@@ -218,10 +335,7 @@ export default function RiwayatPage() {
       if (!res.ok) { alert('Gagal membatalkan tugas. Coba lagi.'); return }
     } catch { alert('Kesalahan jaringan.'); return }
 
-    const updated = tasksData.map(t =>
-      t.id === id ? { ...t, status: 'Dibatalkan' } : t
-    )
-    setTasksData(updated)
+    setTasksData(prev => prev.map(t => t.id === id ? { ...t, status: 'Dibatalkan' } : t))
     setConfirmCancel(null)
   }
 
@@ -238,10 +352,7 @@ export default function RiwayatPage() {
         body: JSON.stringify({ rating }),
       })
     } catch {}
-    const updated = tasksData.map(t =>
-      t.id === id ? { ...t, rating } : t
-    )
-    setTasksData(updated)
+    setTasksData(prev => prev.map(t => t.id === id ? { ...t, rating } : t))
     setRatingModal(null)
   }
 
@@ -258,10 +369,8 @@ export default function RiwayatPage() {
       if (!res.ok) { alert('Gagal mengkonfirmasi. Coba lagi.'); return }
     } catch { alert('Kesalahan jaringan.'); return }
 
-    const updated = tasksData.map(t =>
-      t.id === id ? { ...t, status: 'Selesai' } : t
-    )
-    setTasksData(updated)
+    setTasksData(prev => prev.map(t => t.id === id ? { ...t, status: 'Selesai' } : t))
+    setProofModal(null)
   }
 
   const handleRejectProof = async (id) => {
@@ -277,16 +386,22 @@ export default function RiwayatPage() {
       if (!res.ok) { alert('Gagal menolak bukti. Coba lagi.'); return }
     } catch { alert('Kesalahan jaringan.'); return }
 
-    const updated = tasksData.map(t =>
-      t.id === id ? { ...t, status: 'Diterima' } : t
-    )
-    setTasksData(updated)
+    setTasksData(prev => prev.map(t => t.id === id ? { ...t, status: 'Diterima' } : t))
+    setProofModal(null)
   }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
 
-      {/* ── Rating Modal ── */}
+      {proofModal && (
+        <ProofModal
+          task={proofModal}
+          onClose={() => setProofModal(null)}
+          onConfirm={handleConfirm}
+          onReject={handleRejectProof}
+        />
+      )}
+
       {ratingModal && (
         <RatingModal
           task={ratingModal}
@@ -295,7 +410,6 @@ export default function RiwayatPage() {
         />
       )}
 
-      {/* ── Confirm Cancel Modal ── */}
       {confirmCancel && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 18, padding: '32px 28px', width: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.18)', textAlign: 'center' }}>
@@ -322,11 +436,10 @@ export default function RiwayatPage() {
         </div>
       )}
 
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside style={{ width: 210, background: '#fff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', padding: '24px 0', position: 'sticky', top: 0, height: '100vh', flexShrink: 0 }}>
         <div style={{ padding: '0 20px 24px', fontSize: 20, fontWeight: 900, color: '#2563eb', letterSpacing: '-0.5px' }}>CallZ</div>
 
-        {/* User Box */}
         <div style={{ margin: '0 12px 20px', background: '#f8fafc', borderRadius: 12, padding: '12px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#dbeafe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
             {initialLetter}
@@ -337,7 +450,6 @@ export default function RiwayatPage() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav style={{ padding: '0 10px', flex: 1 }}>
           {navItems.map(item => (
             <Link key={item.label} href={item.href} style={{
@@ -366,10 +478,9 @@ export default function RiwayatPage() {
         </div>
       </aside>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
-        {/* Topbar */}
         <header style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 28px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f1f5f9', borderRadius: 10, padding: '8px 14px', width: 280 }}>
             <span style={{ color: '#94a3b8' }}>🔍</span>
@@ -389,17 +500,15 @@ export default function RiwayatPage() {
           </div>
         </header>
 
-        {/* Area isi riwayat */}
         <div style={{ padding: '28px 32px' }}>
           <h1 style={{ fontSize: 24, fontWeight: 900, color: '#0f172a', marginBottom: 4 }}>Riwayat Tugas</h1>
           <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 24 }}>Semua tugas yang pernah kamu buat</p>
 
-          {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
             {[
-              { label: 'Total Tugas',       value: tasksData.length,            sub: 'Sejak bergabung', color: '#0f172a' },
-              { label: 'Berhasil',          value: totalSelesai + totalDiterima, sub: successRate,      color: '#16a34a' },
-              { label: 'Total Pengeluaran', value: fmt(totalBiaya),              sub: 'Semua waktu',    color: '#2563eb' },
+              { label: 'Total Tugas',       value: tasksData.length,             sub: 'Sejak bergabung', color: '#0f172a' },
+              { label: 'Berhasil',          value: totalSelesai + totalDiterima,  sub: successRate,      color: '#16a34a' },
+              { label: 'Total Pengeluaran', value: fmt(totalBiaya),               sub: 'Semua waktu',    color: '#2563eb' },
             ].map((s, i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>{s.label}</p>
@@ -409,10 +518,9 @@ export default function RiwayatPage() {
             ))}
           </div>
 
-          {/* Filters */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              {['Semua', 'Menunggu', 'Diterima', 'Selesai', 'Dibatalkan'].map(f => (
+              {['Semua', 'Menunggu', 'Diterima', 'Bukti Dikirim', 'Selesai', 'Dibatalkan'].map(f => (
                 <button key={f} onClick={() => setFilter(f)} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600,
@@ -443,7 +551,6 @@ export default function RiwayatPage() {
             </div>
           </div>
 
-          {/* FIX #2: Tampilkan loading & error state */}
           {loading ? (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '64px', textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
@@ -461,12 +568,11 @@ export default function RiwayatPage() {
               </button>
             </div>
           ) : (
-            /* Table */
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    {['Tugas', 'Mitra', 'Tanggal', 'Durasi', 'Status', 'Biaya', 'Rating Kamu', 'Rating dari Mitra', ''].map((h, i) => (
+                    {['Tugas', 'Mitra', 'Tanggal', 'Durasi', 'Status', 'Biaya', 'Rating Kamu', 'Rating dari Mitra', 'Aksi'].map((h, i) => (
                       <th key={h + i} style={{ padding: '14px 16px', textAlign: i === 5 ? 'right' : 'left', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
                     ))}
                   </tr>
@@ -504,7 +610,6 @@ export default function RiwayatPage() {
                       <td style={{ padding: '14px 16px' }}><StatusBadge status={r.status} /></td>
                       <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: r.biaya === 0 ? '#cbd5e1' : '#0f172a' }}>{fmt(r.biaya)}</td>
 
-                      {/* Kolom: Rating Kamu ke Mitra */}
                       <td style={{ padding: '14px 16px' }}>
                         {r.status === 'Selesai' ? (
                           r.rating
@@ -515,7 +620,6 @@ export default function RiwayatPage() {
                         )}
                       </td>
 
-                      {/* Kolom: Rating dari Mitra ke User */}
                       <td style={{ padding: '14px 16px' }}>
                         {r.mitraRating ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -529,54 +633,45 @@ export default function RiwayatPage() {
                         )}
                       </td>
 
-                      {/* Kolom: Aksi */}
                       <td style={{ padding: '14px 16px' }}>
-                        {r.status === 'Menunggu' && (
-                          <button
-                            onClick={() => setConfirmCancel(r.id)}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                            onMouseEnter={e => { e.target.style.background = '#fee2e2' }}
-                            onMouseLeave={e => { e.target.style.background = '#fff5f5' }}
-                          >
-                            Batalkan
-                          </button>
-                        )}
-                        {r.status === 'Diterima' && (
-                          <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Dalam proses</span>
-                        )}
-                        {(r.status === 'Bukti Dikirim' || r.status === 'PROOF_SUBMITTED') && (
-                          <div style={{ display: 'flex', gap: 6, flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          {r.status === 'Menunggu' && (
                             <button
-                              onClick={() => handleConfirm(r.id)}
-                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#16a34a', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                              onMouseEnter={e => { e.target.style.background = '#dcfce7' }}
-                              onMouseLeave={e => { e.target.style.background = '#f0fdf4' }}
+                              onClick={() => setConfirmCancel(r.id)}
+                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2' }}
+                              onMouseLeave={e => { e.currentTarget.style.background = '#fff5f5' }}
                             >
-                              ✓ Konfirmasi
+                              Batalkan
                             </button>
+                          )}
+                          {r.status === 'Diterima' && (
+                            <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Dalam proses</span>
+                          )}
+                          {(r.status === 'Bukti Dikirim' || r.status === 'PROOF_SUBMITTED') && (
                             <button
-                              onClick={() => handleRejectProof(r.id)}
-                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                              onMouseEnter={e => { e.target.style.background = '#fee2e2' }}
-                              onMouseLeave={e => { e.target.style.background = '#fff5f5' }}
+                              onClick={() => setProofModal(r)}
+                              style={{ padding: '5px 12px', borderRadius: 8, border: '1.5px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+                              onMouseEnter={e => { e.currentTarget.style.background = '#e0f2fe' }}
+                              onMouseLeave={e => { e.currentTarget.style.background = '#f0f9ff' }}
                             >
-                              ✗ Tolak Bukti
+                              📷 Lihat Bukti
                             </button>
-                          </div>
-                        )}
-                        {r.status === 'Selesai' && !r.rating && (
-                          <button
-                            onClick={() => setRatingModal(r)}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#d97706', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                            onMouseEnter={e => { e.target.style.background = '#fef3c7' }}
-                            onMouseLeave={e => { e.target.style.background = '#fffbeb' }}
-                          >
-                            ⭐ Beri Rating
-                          </button>
-                        )}
-                        {r.status === 'Selesai' && r.rating && (
-                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Selesai</span>
-                        )}
+                          )}
+                          {r.status === 'Selesai' && !r.rating && (
+                            <button
+                              onClick={() => setRatingModal(r)}
+                              style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#d97706', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = '#fef3c7' }}
+                              onMouseLeave={e => { e.currentTarget.style.background = '#fffbeb' }}
+                            >
+                              ⭐ Beri Rating
+                            </button>
+                          )}
+                          {r.status === 'Selesai' && r.rating && (
+                            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Selesai</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

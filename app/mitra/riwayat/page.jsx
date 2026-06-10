@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { getStorageUrl } from "@/lib/api";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -51,7 +52,6 @@ const navItems = [
   },
 ];
 
-// FIX #1: Definisikan mapStatus di luar komponen
 function mapStatus(apiStatus) {
   const map = {
     "PENDING":          "Menunggu",
@@ -223,7 +223,6 @@ export default function RiwayatPage() {
 
   const filters = ["Semua", "Selesai", "Dibatalkan"];
 
-  // FIX #2: Ganti reloadData (localStorage) dengan fetchRiwayat (API)
   useEffect(() => {
     const fetchRiwayat = async () => {
       try {
@@ -232,7 +231,6 @@ export default function RiwayatPage() {
 
         const token = localStorage.getItem("token");
 
-        // Guard: hentikan jika tidak ada token
         if (!token) {
           setError("Sesi tidak ditemukan. Silakan login kembali.");
           setLoading(false);
@@ -248,7 +246,6 @@ export default function RiwayatPage() {
           },
         });
 
-        // Cek status HTTP sebelum parse JSON
         if (!res.ok) {
           setError(`Gagal memuat data (HTTP ${res.status}). Coba muat ulang halaman.`);
           setLoading(false);
@@ -258,7 +255,6 @@ export default function RiwayatPage() {
         const json = await res.json();
         const raw = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
 
-        // FIX #1: mapStatus sekarang terdefinisi
         const mapped = raw.map((t) => ({
           id:          String(t.id),
           judul:       t.title || "—",
@@ -273,9 +269,10 @@ export default function RiwayatPage() {
                           })
                         : "—",
           durasi:      "—",
-          biaya:       t.total_estimated_fee || 0,
+          biaya:       (t.total_estimated_fee || 0) * 0.8,
           rating:      t.user_rating || 0,
           mitraRating: t.mitra_rating || 0,
+          proofUrl:    getStorageUrl(t.proof_of_work),  // ← tambah ini
           icon:        "📦",
         }));
 
@@ -301,6 +298,7 @@ export default function RiwayatPage() {
   });
 
   const totalSelesai = tasksData.filter(r => r.status === "Selesai").length;
+  // totalBiaya otomatis sudah 80% karena biaya di-mapping dengan * 0.8
   const totalBiaya   = tasksData
     .filter(r => r.status === "Selesai")
     .reduce((a, b) => a + (b.biaya || 0), 0);
@@ -309,12 +307,11 @@ export default function RiwayatPage() {
     ? (ratingList.reduce((a, b) => a + b.rating, 0) / ratingList.length).toFixed(1)
     : "0.0";
 
-  // FIX #4: handleMitraRating hit ke API, bukan hanya tulis localStorage
   const handleMitraRating = async (taskId, rating) => {
     try {
       const token = localStorage.getItem("token");
       const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-      await fetch(`${baseUrl}/tasks/${taskId}/rate-user`, {
+      await fetch(`${baseUrl}/mitra/tasks/${taskId}/rate-user`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -369,10 +366,11 @@ export default function RiwayatPage() {
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
             {[
-              { label: "Total Tugas",      value: tasksData.length, sub: "Sejak bergabung",  color: "#0f172a" },
-              { label: "Berhasil",         value: totalSelesai,      sub: tasksData.length > 0 ? `${Math.round(totalSelesai / tasksData.length * 100)}% success rate` : "0% success rate", color: "#16a34a" },
-              { label: "Total Pendapatan", value: fmt(totalBiaya),   sub: "Semua waktu",     color: "#2563eb", small: true },
-              { label: "Rating Rata-rata", value: avgRating + " ★", sub: "Dari semua user",  color: "#f59e0b" },
+              { label: "Total Tugas",      value: tasksData.length,  sub: "Sejak bergabung",  color: "#0f172a" },
+              { label: "Berhasil",         value: totalSelesai,       sub: tasksData.length > 0 ? `${Math.round(totalSelesai / tasksData.length * 100)}% success rate` : "0% success rate", color: "#16a34a" },
+              // ✅ PERUBAHAN: subtitle menjelaskan sudah dipotong 20%
+              { label: "Total Pendapatan", value: fmt(totalBiaya),    sub: "Setelah potongan 20%", color: "#2563eb", small: true },
+              { label: "Rating Rata-rata", value: avgRating + " ★",  sub: "Dari semua user",  color: "#f59e0b" },
             ].map(s => (
               <div key={s.label} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: "18px 22px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
@@ -421,7 +419,6 @@ export default function RiwayatPage() {
             </div>
           </div>
 
-          {/* FIX #2: Tampilkan loading & error state */}
           {loading ? (
             <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: "64px", textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>&#9203;</div>
@@ -530,7 +527,7 @@ export default function RiwayatPage() {
                             )}
                           </td>
 
-                          {/* Biaya */}
+                          {/* Biaya (sudah dipotong 20%) */}
                           <td style={{ padding: "14px 16px", textAlign: "right", fontSize: 13, fontWeight: 700, color: r.biaya === 0 ? "#d1d5db" : "#0f172a" }}>
                             {fmt(r.biaya)}
                           </td>

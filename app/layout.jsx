@@ -11,6 +11,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="id">
+      <head>
+        <link rel="icon" href="/images/logo.jpg" />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         {children}
       </body>

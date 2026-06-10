@@ -6,11 +6,10 @@ export default function HomePage() {
     <div className="min-h-screen bg-white">
       {/* Navbar */}
       <nav className="flex items-center justify-between px-8 py-4 border-b border-gray-100">
-        <span className="text-xl font-black tracking-tight text-blue-600">CALLZ</span>
+<img src="/images/logo.jpg" alt="CALLZ" className="h-12 w-auto" />        
         <div className="hidden md:flex gap-8 text-sm text-gray-600">
           <a href="#layanan" className="hover:text-blue-600 transition-colors">Layanan</a>
           <a href="#tentang" className="hover:text-blue-600 transition-colors">Tentang</a>
-          <a href="#bantuan" className="hover:text-blue-600 transition-colors">Bantuan</a>
         </div>
         <Link
           href="/login"
@@ -32,13 +31,13 @@ export default function HomePage() {
           </p>
           <div className="flex gap-4 flex-wrap">
             <Link
-              href="/dashboard"
+              href="/login"
               className="bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
             >
               Gunakan Jasa (User) →
             </Link>
             <Link
-              href="/mitra"
+              href="/login"
               className="border-2 border-gray-800 text-gray-800 font-semibold px-6 py-3 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Mulai Kerja (Mitra)
@@ -129,6 +128,76 @@ export default function HomePage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Tentang */}
+      <section id="tentang" className="py-16 max-w-6xl mx-auto px-8">
+        <div className="flex flex-col md:flex-row gap-16 items-start">
+          {/* Left: About text */}
+          <div className="flex-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-600 mb-3">Tentang Kami</p>
+            <h2 className="text-3xl font-black leading-tight mb-5">
+              Ada Kerjaan?<br />
+              <span className="text-blue-600">CallZ</span> Aja!
+            </h2>
+            <p className="text-gray-500 text-sm leading-relaxed mb-6">
+              CallZ adalah platform jasa serba suruh yang hadir untuk menanggulangi permasalahan pekerjaan domestik, emosional, dan pekerjaan khusus. Kami hadir sebagai solusi bagi masyarakat urban yang tidak memiliki waktu untuk menyelesaikan pekerjaan dengan prioritas rendah.
+            </p>
+            <div className="mb-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Visi</p>
+              <p className="text-gray-700 text-sm leading-relaxed">
+                Menjadi platform penyedia jasa serba suruh terdepan dan terpercaya yang mentransformasi kemudahan hidup masyarakat urban melalui efisiensi waktu dan solusi harian yang adaptif.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Misi</p>
+              <p className="text-gray-700 text-sm leading-relaxed">
+                Mewujudkan layanan asisten harian yang fleksibel, responsif, aman, dan berdampak sosial — memberdayakan mitra lokal sambil meringankan beban harian pengguna kami.
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Nilai Utama */}
+          <div className="flex-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6">Nilai Utama Kami</p>
+            <div className="space-y-4">
+              {[
+                {
+                  icon: '🛡️',
+                  title: 'Keamanan & Kepercayaan',
+                  desc: 'Setiap mitra CallZ telah melalui proses seleksi dan verifikasi yang ketat demi kenyamanan Anda.',
+                  color: 'bg-blue-50 border-blue-100',
+                },
+                {
+                  icon: '⚡',
+                  title: 'Efisiensi',
+                  desc: 'Kami menghargai waktu Anda. Setiap tugas diselesaikan dengan cepat dan tepat sasaran.',
+                  color: 'bg-yellow-50 border-yellow-100',
+                },
+                {
+                  icon: '🔧',
+                  title: 'Solutif & Fleksibel',
+                  desc: 'Mulai dari mengantar dokumen, mengantre, hingga urusan domestik lainnya — kami siap menyesuaikan dengan kebutuhan unik Anda.',
+                  color: 'bg-green-50 border-green-100',
+                },
+                {
+                  icon: '🤝',
+                  title: 'Social Impact',
+                  desc: 'Menciptakan lapangan kerja inklusif dan peluang penghasilan fleksibel bagi mitra lokal melalui teknologi CallZ.',
+                  color: 'bg-orange-50 border-orange-100',
+                },
+              ].map((v, i) => (
+                <div key={i} className={`flex gap-4 items-start rounded-2xl border p-5 ${v.color}`}>
+                  <div className="text-2xl mt-0.5">{v.icon}</div>
+                  <div>
+                    <p className="font-bold text-gray-900 text-sm mb-1">{v.title}</p>
+                    <p className="text-gray-500 text-sm leading-relaxed">{v.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

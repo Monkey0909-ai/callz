@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { API } from "@/api"
+import { NgrokImage } from "@/components/NgrokImage"
 
 // ── Token helper ───────────────────────────────────────────────────────────────
 function getMitraToken() {
@@ -79,6 +80,16 @@ function StatusBanner({ status, rejectionNote, createdAt }) {
   )
 }
 
+function toProxyUrl(raw) {
+    if (!raw) return null
+    const base = process.env.NEXT_PUBLIC_API_URL
+    if (raw.startsWith('http')) {
+        const match = raw.match(/\/storage\/(.+)/)
+        return match ? `${base}/file/${match[1]}` : raw
+    }
+    return `${base}/file/${raw.replace(/^\//, '')}`
+}
+
 // ── Upload Box ─────────────────────────────────────────────────────────────────
 function UploadBox({ label, icon: Icon, file, onFileChange, onRemove, disabled }) {
   const inputRef = useRef(null)
@@ -127,6 +138,7 @@ function UploadBox({ label, icon: Icon, file, onFileChange, onRemove, disabled }
       >
         {file && preview ? (
           <div className="flex items-center gap-3">
+            {/* Preview lokal pakai <img> biasa karena ini object URL, bukan ngrok URL */}
             <img
               src={preview}
               alt="preview"
@@ -183,10 +195,12 @@ function DocPreview({ fotoKtp, fotoSim }) {
           <div className="flex-1">
             <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Foto KTP</p>
             <a href={fotoKtp} target="_blank" rel="noopener noreferrer">
-              <img
+              {/* NgrokImage menggantikan <img> biasa — fetch dulu dengan header bypass */}
+              <NgrokImage
                 src={fotoKtp}
                 alt="KTP"
                 className="h-20 w-full rounded-xl border border-border object-cover transition hover:opacity-80"
+                fallbackText="Gagal memuat KTP"
               />
             </a>
           </div>
@@ -195,10 +209,11 @@ function DocPreview({ fotoKtp, fotoSim }) {
           <div className="flex-1">
             <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Foto SIM</p>
             <a href={fotoSim} target="_blank" rel="noopener noreferrer">
-              <img
+              <NgrokImage
                 src={fotoSim}
                 alt="SIM"
                 className="h-20 w-full rounded-xl border border-border object-cover transition hover:opacity-80"
+                fallbackText="Gagal memuat SIM"
               />
             </a>
           </div>
@@ -226,7 +241,6 @@ export default function VerificationPage() {
   const [success, setSuccess] = useState("")
   const [statusData, setStatusData] = useState(null)
 
-  // Fetch status on mount; poll every 10 s while PENDING; redirect when APPROVED
   useEffect(() => {
     let intervalId = null
 
@@ -244,10 +258,8 @@ export default function VerificationPage() {
           setStatusData(data.data)
           if (data.data.status === "APPROVED") {
             clearInterval(intervalId)
-            // Redirect ke dashboard mitra setelah verifikasi disetujui
             router.replace("/mitra")
           }
-          // Stop polling jika sudah REJECTED — tidak perlu terus polling
           if (data.data.status === "REJECTED") {
             clearInterval(intervalId)
           }
@@ -297,7 +309,6 @@ export default function VerificationPage() {
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
           "ngrok-skip-browser-warning": "true",
-          // Do NOT set Content-Type; let browser set multipart boundary
         },
         body: formData,
       })
@@ -325,20 +336,17 @@ export default function VerificationPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-secondary px-4 py-6">
-      {/* Back link */}
       <div className="mb-4 w-full max-w-md">
         <button
           onClick={() => router.push("/mitra")}
           className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Kembali ke Dashboard
+          Kembali ke Login
         </button>
       </div>
 
-      {/* Card */}
       <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-sm">
-        {/* Header */}
         <div className="flex flex-col items-center border-b border-border px-6 py-8">
           <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-primary shadow-md shadow-primary/30">
             <ShieldCheck className="size-8 text-primary-foreground" />
@@ -349,7 +357,6 @@ export default function VerificationPage() {
           </p>
         </div>
 
-        {/* Body */}
         <div className="p-6">
           {fetchingStatus ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
@@ -365,7 +372,10 @@ export default function VerificationPage() {
                 />
               )}
 
-              <DocPreview fotoKtp={statusData?.foto_ktp} fotoSim={statusData?.foto_sim} />
+              <DocPreview 
+                  fotoKtp={toProxyUrl(statusData?.foto_ktp)} 
+                  fotoSim={toProxyUrl(statusData?.foto_sim)} 
+              />
 
               {canSubmit && (
                 <>
